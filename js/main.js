@@ -82,7 +82,7 @@ function playMusic(notes) {
     var toneNotes = notes.map(x => x.keys.map(y => y.replace('/', '')));
     console.log(toneNotes);
     // Now, set up Tone to play the score
-    const synth = getCustomSynth(); //getPianoSynth();
+    const synth = getPianoSynth();
     const seq = new Tone.Sequence((time, note) => {
         synth.triggerAttackRelease(note, '4n', time);
     }, toneNotes, '4n');

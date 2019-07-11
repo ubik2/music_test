@@ -1,61 +1,25 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
     <title>Music Test</title>
     <link href="css/default.css" rel="stylesheet" />
-    <script src="js/Tone.js"></script>
-    <script src="js/vexflow-min.js"></script>
-    <script src="js/main.js"></script>
 </head>
 <body>
-    <div id="score"></div>
-
-    <input type="button" value="Replay" id="playButton">
-    <input type="button" value="ShowAnswer" id="showAnswerButton">
-    <input type="button" value="Incorrect" id="againButton" hidden>
-    <input type="button" value="Correct" id="correctButton" hidden>
-    <input type="button" value="Bury" id="buryButton" hidden>
-    <input type="button" value="Replay" id="replayButton" hidden>
-
     <script>
-        var renderer = initVexFlow();
-        var currentCard;
-        function frontCard(card) {
-            currentCard = card;
-            document.getElementById("playButton").hidden = false;
-            document.getElementById("showAnswerButton").hidden = false;
-            document.getElementById("againButton").hidden = true;
-            document.getElementById("correctButton").hidden = true;
-            document.getElementById("buryButton").hidden = true;
-            document.getElementById("replayButton").hidden = true;
-            displayNotes(renderer, currentCard.vfNotes, currentCard.keySignature);
-            // playMusic(card.vfNotes.slice(0, 1));
+        function showCards() {
+            document.getElementById("main").hidden = true;
+            document.getElementById("cards").hidden = false;
+            window.frames["cards"].src = "card.html";
         }
-        function backCard() {
-            document.getElementById("playButton").hidden = true;
-            document.getElementById("showAnswerButton").hidden = true;
-            document.getElementById("againButton").hidden = false;
-            document.getElementById("correctButton").hidden = false;
-            document.getElementById("buryButton").hidden = false;
-            document.getElementById("replayButton").hidden = false;
-        }
-        document.getElementById("playButton").addEventListener("click", function () { playMusic(currentCard.vfNotes.slice(0, 1)) });
-        document.getElementById("replayButton").addEventListener("click", function () { playMusic(currentCard.vfNotes.slice(0, 2)) });
-        document.getElementById("showAnswerButton").addEventListener("click", function () {
-            backCard();
-            playMusic(currentCard.vfNotes.slice(1, 2));
-        });
-        document.getElementById("againButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playMusic(currentCard.vfNotes.slice(0, 1)); });
-        document.getElementById("correctButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playMusic(currentCard.vfNotes.slice(0, 1)); });
-        document.getElementById("buryButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playMusic(currentCard.vfNotes.slice(0, 1)); });
-
-        var keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
-        var key = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
-        var cards = generateDeck(key);
-        var card = cards[Math.floor(Math.random() * cards.length)];
-        frontCard(card);
     </script>
-
+    <div id="main">
+        Main Menu
+        <table id="decks">
+            <tr><th>SCALE</th><th>TODAY</th><th>LEARNING</th><th>UNSEEN</th></tr>
+            <tr><td>C Major</td><td>0</td><td>0</td><td>42</td><td><button onclick="showCards()">Study Now</button></td></tr>
+        </table>
+    </div>
+    <iframe id="cards" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden />
 </body>
 </html>
