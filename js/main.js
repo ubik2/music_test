@@ -23,6 +23,7 @@ function displayNotes(notes, keySignature) {
     var voice = new Vex.Flow.Voice({ num_beats: notes.length });
     voice.addTickables(notes);
 
+    // important side effects
     var formatter = new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
     voice.draw(context, stave);
 }
@@ -46,12 +47,13 @@ function playMusic(notes) {
     var toneNotes = notes.map(x => x.keys.map(y => y.replace('/', '')));
     console.log(toneNotes);
     // Now, set up Tone to play the score
-    Tone.Transport.start();
     const synth = getPianoSynth();
     const seq = new Tone.Sequence((time, note) => {
         synth.triggerAttackRelease(note, '8n', time);
     }, toneNotes, '4n');
 
     seq.loop = false;
-    seq.start(0.1); // should be greater than 0, so we don't lose the first note
+    seq.start();
+
+    Tone.Transport.start();
 }
