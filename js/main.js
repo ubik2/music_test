@@ -1,18 +1,30 @@
-﻿
-// First, set up VexFlow to render the score
-function displayNotes(notes) {
-    const easyscore = notes.map(x => x + '/4').join(", ");
-    const vf = new Vex.Flow.Factory({
-        renderer: { elementId: 'score', width: 500, height: 200 }
-    });
-    const score = vf.EasyScore();
-    const system = vf.System();
-    system.addStave({
-        voices: [ 
-            score.voice(score.notes(easyscore))
-        ]
-    }).addClef('treble');
-    vf.draw();
+﻿function parseNotes(numericNotation, key) { // numeric notation is 1-7 representing the note offsets in the major scale
+    const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
+    var numbers = numericNotation.split(' ').map(x => parseInt(x));
+    var offsets = numbers.map(x => majorIntervals[x-1]);
+    var keyOffset = Vex.Flow.keyProperties.note_values[key.toUpperCase()].int_val;
+    var noteOffsets = offsets.map(x => 48 + keyOffset + x);
+    console.log(noteOffsets);
+    var noteKeys = noteOffsets.map(x => Vex.Flow.integerToNote(x % 12) + '/' + Math.floor(x / 12));
+    return noteKeys.map(x => new Vex.Flow.StaveNote({ clef: "treble", keys: [x], duration: "q" }));
+}
+
+function displayNotes(notes, keySignature) {
+    var div = document.getElementById("score");
+    var renderer = new Vex.Flow.Renderer(div, Vex.Flow.Renderer.Backends.SVG);
+    renderer.resize(200, 200);
+    var context = renderer.getContext();
+
+    var stave = new Vex.Flow.Stave(10, 40, 200);
+    stave.addClef("treble");
+    stave.setKeySignature(keySignature);
+    stave.setContext(context).draw();
+
+    var voice = new Vex.Flow.Voice({ num_beats: notes.length });
+    voice.addTickables(notes);
+
+    var formatter = new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
+    voice.draw(context, stave);
 }
 
 function getCustomSynth() {
@@ -31,14 +43,15 @@ function getPianoSynth() {
 }
 
 function playMusic(notes) {
+    var toneNotes = notes.map(x => x.keys.map(y => y.replace('/', '')));
+    console.log(toneNotes);
     // Now, set up Tone to play the score
     Tone.Transport.start();
     const synth = getPianoSynth();
     const seq = new Tone.Sequence((time, note) => {
         synth.triggerAttackRelease(note, '8n', time);
-    }, notes, '4n');
-    
+    }, toneNotes, '4n');
+
     seq.loop = false;
     seq.start(0.1); // should be greater than 0, so we don't lose the first note
 }
-

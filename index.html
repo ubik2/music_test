@@ -19,5 +19,19 @@
         document.getElementById("playButton").addEventListener("click", function() { playMusic(notes) });
     </script>
 
+    <input type="button" value="Play" id="playButton">
+
+    <script>
+        var keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
+        var keyIndex = Math.floor(Math.random() * keyOptions.length);
+        var key = keyOptions[keyIndex];
+        var note1Index = Math.floor(Math.random() * 7) + 1;
+        var note2Index = Math.floor(Math.random() * 7) + 1;
+        var noteOffsets = note1Index + " " + note2Index;
+        var notes = parseNotes(noteOffsets, key);
+        displayNotes(notes, key);
+        document.getElementById("playButton").addEventListener("click", function () { playMusic(notes) });
+    </script>
+
 </body>
 </html>
