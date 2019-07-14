@@ -4,7 +4,7 @@ function generateDeck(keySignature, major = true) {
     const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
     const baseOffset = 48;
     var intervals = (major) ? majorIntervals : minorIntervals;
-    var keyOffset = Vex.Flow.keyProperties.note_values[key.toUpperCase()].int_val;
+    var keyOffset = Vex.Flow.keyProperties.note_values[keySignature.toUpperCase()].int_val;
     var cards = [];
     for (var i = 0; i < 7; i++) {
         var note1Offset = baseOffset + keyOffset + intervals[i];
@@ -15,13 +15,13 @@ function generateDeck(keySignature, major = true) {
             }
             var note2Offset = baseOffset + keyOffset + intervals[j];
             var note2 = Vex.Flow.integerToNote(note2Offset % 12) + '/' + Math.floor(note2Offset / 12);
-            var notes = [note1, note2];
-            var vfNotes = notes.map(x => new Vex.Flow.StaveNote({ clef: "treble", keys: [x], duration: "q" }));
-            cards.push({ keySignature: keySignature, notes: notes, vfNotes: vfNotes });
+            cards.push(new MusicCard(keySignature, note1, note2));
         }
     }
     return cards;
 }
+
+
 
 function initVexFlow() {
     var div = document.getElementById("score");
@@ -30,17 +30,13 @@ function initVexFlow() {
     return renderer;
 }
 
-function parseNotes(numericNotation, key) { // numeric notation is 1-7 representing the note offsets in the major scale
-    const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
-    var numbers = numericNotation.split(' ').map(x => parseInt(x));
-    var offsets = numbers.map(x => majorIntervals[x-1]);
-    var keyOffset = Vex.Flow.keyProperties.note_values[key.toUpperCase()].int_val;
-    var noteOffsets = offsets.map(x => 48 + keyOffset + x);
-    console.log(noteOffsets);
-    var noteKeys = noteOffsets.map(x => Vex.Flow.integerToNote(x % 12) + '/' + Math.floor(x / 12));
-    return noteKeys.map(x => new Vex.Flow.StaveNote({ clef: "treble", keys: [x], duration: "q" }));
-}
-
+/**
+ * Renders the specified notes into a context using Vex.Flow
+ * 
+ * @param {Vex.Flow.Renderer} renderer
+ * @param {Array.<Vex.Flow.StaveNote>} notes
+ * @param {string} keySignature
+ */
 function displayNotes(renderer, notes, keySignature) {
     var context = renderer.getContext();
     while (context.svg.childElementCount !== 0) {
@@ -63,32 +59,74 @@ function displayNotes(renderer, notes, keySignature) {
     context.closeGroup();
 }
 
-function getCustomSynth() {
-    var options = {
-        portamento: 0,
-        oscillator: { type: "square" },
-        filter: { Q: 1, type: "lowpass", rolloff: -24 },
-        envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 1 },
-        filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 1.5, releaseCurve: "linear", baseFrequency: 50, octaves: 4.4 }
-    };
-    return new Tone.MonoSynth(options).toMaster();
-}
-
 function getPianoSynth() {
-    return new Tone.MonoSynth(4, Tone.Synth, { volume: -2, oscillator: { partials: [1, 2, 5] }, portamento: .005 }).toMaster();
+    return new Tone.PolySynth(4, Tone.Synth, { volume: -2, oscillator: { partials: [1, 2, 5] }, portamento: .005 }).toMaster();
 }
 
+/**
+ * Plays a sequence of notes. All notes should have the same duration.
+ * 
+ * @param {Array.<Vex.Flow.StaveNote>} notes notes to play
+ */
 function playMusic(notes) {
-    var toneNotes = notes.map(x => x.keys.map(y => y.replace('/', '')));
+    if (notes.length === 0) {
+        return;
+    }
+    var toneNotes = notes.map(getToneNote);
+    var toneDuration = getToneDuration(notes[0]);
     console.log(toneNotes);
     // Now, set up Tone to play the score
     const synth = getPianoSynth();
     const seq = new Tone.Sequence((time, note) => {
-        synth.triggerAttackRelease(note, '4n', time);
+        synth.triggerAttackRelease(note, toneDuration, time);
     }, toneNotes, '4n');
 
     seq.loop = false;
     seq.start();
 
     Tone.Transport.start();
+}
+
+/**
+ * Generate a quarter note for playing and displaying
+ * 
+ * @param {string} note - note in the Vex.Flow form (e.g. "C#/4")
+ * @return {Vex.Flow.StaveNote} - stave note version of the note
+ */
+function getStaveNote(note) {
+    return new Vex.Flow.StaveNote({ clef: "treble", keys: [note], duration: "q" });
+}
+
+/**
+ * Gets the string describing the tone duration in the format used by Tone.js
+ * 
+ * @param {Vex.Flow.StaveNote} note the note
+ * @return {string} the string describing the tone duration
+ */
+function getToneDuration(note) {
+    var parsedNote = Vex.Flow.parseNoteData(note);
+    return Vex.Flow.durationToNumber(parsedNote.duration) + 'n';
+}
+
+/**
+ * Gets the string describing the tone note in the format used by Tone.js
+ *
+ * @param {Vex.Flow.StaveNote} note the note
+ * @return {Array.<string>} the string describing the tone duration
+ */
+function getToneNote(note) {
+    return note.keys.map(x => x.replace('/', ''));
+}
+
+/**
+ * Plays a single note (which may be a chord)
+ * 
+ * @param {Vex.Flow.StaveNote} note - note to play
+ */
+function playNote(note) {
+    const synth = getPianoSynth();
+    var toneNote = getToneNote(note);
+    var toneDuration = getToneDuration(note);
+    // Now, set up Tone to play the score
+    synth.triggerAttackRelease(toneNote, toneDuration);
 }
