@@ -1,4 +1,8 @@
-﻿
+﻿import MusicCard from "./musiccard";
+import Vex from "../node_modules/vexflow/src/index";
+// Tone isn't an ES6 module yet, so I need to pull it from card.html
+//import Tone from "./Tone.js"; 
+
 function generateDeck(keySignature, major = true) {
     const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
     const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
@@ -33,9 +37,9 @@ function initVexFlow() {
 /**
  * Renders the specified notes into a context using Vex.Flow
  * 
- * @param {Vex.Flow.Renderer} renderer
- * @param {Array.<Vex.Flow.StaveNote>} notes
- * @param {string} keySignature
+ * @param {Vex.Flow.Renderer} renderer renderer that will display the notes
+ * @param {Array.<Vex.Flow.StaveNote>} notes array of notes to display
+ * @param {string} keySignature key signature used for the stave
  */
 function displayNotes(renderer, notes, keySignature) {
     var context = renderer.getContext();
@@ -61,30 +65,6 @@ function displayNotes(renderer, notes, keySignature) {
 
 function getPianoSynth() {
     return new Tone.PolySynth(4, Tone.Synth, { volume: -2, oscillator: { partials: [1, 2, 5] }, portamento: .005 }).toMaster();
-}
-
-/**
- * Plays a sequence of notes. All notes should have the same duration.
- * 
- * @param {Array.<Vex.Flow.StaveNote>} notes notes to play
- */
-function playMusic(notes) {
-    if (notes.length === 0) {
-        return;
-    }
-    var toneNotes = notes.map(getToneNote);
-    var toneDuration = getToneDuration(notes[0]);
-    console.log(toneNotes);
-    // Now, set up Tone to play the score
-    const synth = getPianoSynth();
-    const seq = new Tone.Sequence((time, note) => {
-        synth.triggerAttackRelease(note, toneDuration, time);
-    }, toneNotes, '4n');
-
-    seq.loop = false;
-    seq.start();
-
-    Tone.Transport.start();
 }
 
 /**
@@ -130,3 +110,55 @@ function playNote(note) {
     // Now, set up Tone to play the score
     synth.triggerAttackRelease(toneNote, toneDuration);
 }
+
+var currentCard;
+var currentNotes;
+function setupPage() {
+    var renderer = initVexFlow();
+    var frontButtons = [
+        document.getElementById("playButton"),
+        document.getElementById("showAnswerButton")
+    ];
+    var backButtons = [
+        document.getElementById("againButton"),
+        document.getElementById("hardButton"),
+        document.getElementById("goodButton"),
+        document.getElementById("easyButton"),
+        document.getElementById("replayButton")
+    ]
+    function handleNoteClick(note) {
+        playNote(note);
+    }
+    function frontCard(card) {
+        frontButtons.forEach(function (x) { x.hidden = false; });
+        backButtons.forEach(function (x) { x.hidden = true; });
+        currentCard = card;
+        currentNotes = [getStaveNote(currentCard.note1), getStaveNote(currentCard.note2)];
+        displayNotes(renderer, currentNotes, currentCard.keySignature);
+        currentNotes[0].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[0]); };
+    }
+    function backCard() {
+        frontButtons.forEach(function (x) { x.hidden = true; });
+        backButtons.forEach(function (x) { x.hidden = false; });
+        currentNotes[1].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[1]); };
+    }
+    document.getElementById("playButton").addEventListener("click", function () { playNote(currentNotes[0]) });
+    document.getElementById("replayButton").addEventListener("click", function () { playNote(currentNotes[1]) });
+    document.getElementById("showAnswerButton").addEventListener("click", function () {
+        backCard();
+        playNote(currentNotes[1]);
+    });
+    document.getElementById("againButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
+    document.getElementById("hardButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
+    document.getElementById("goodButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
+    document.getElementById("easyButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
+
+    var keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
+    var keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
+    var cards = generateDeck(keySignature);
+    var card = cards[Math.floor(Math.random() * cards.length)];
+    frontCard(card);
+    playNote(currentNotes[0]);
+}
+
+setupPage();

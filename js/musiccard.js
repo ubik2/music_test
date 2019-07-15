@@ -5,7 +5,7 @@ const CardType = {
     RELEARN: 3
 };
 
-class MusicCard {
+export default class MusicCard {
     /**
      * Create a card to represent a basic bit of music
      * @param {string} keySignature - key signature as a string (e.g. "Cb"). The value should be the major key version.

@@ -1,0 +1,33 @@
+{
+  "name": "music_test",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "dependencies": {
+    "nan": "^2.14.0",
+    "tone": "^13.4.9",
+    "vexflow": "^1.2.89"
+  },
+  "devDependencies": {
+    "http-server": "^0.11.1",
+    "jest": "^24.8.0",
+    "webpack": "^4.35.3",
+    "webpack-cli": "^3.3.6"
+  },
+  "scripts": {
+    "build": "webpack",
+    "start": "http-server -c-1 -p 8081 -e js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ubik2/music_test.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ubik2/music_test/issues"
+  },
+  "homepage": "https://github.com/ubik2/music_test#readme"
+}

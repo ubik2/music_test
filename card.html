@@ -5,10 +5,7 @@
     <title>Music Test</title>
     <link href="css/default.css" rel="stylesheet" />
     <script src="js/Tone.js"></script>
-    <script src="js/vexflow-min.js"></script>
-    <script src="js/deck.js"></script>
-    <script src="js/music_card.js"></script>
-    <script src="js/main.js"></script>
+    <script type="module" src="js/main.js"></script>
 </head>
 <body>
     <div id="score"></div>
@@ -22,53 +19,6 @@
     <input type="button" value="Replay" id="replayButton" hidden>
 
     <script>
-        var currentCard;
-        var currentNotes;
-        var renderer = initVexFlow();
-        var frontButtons = [
-            document.getElementById("playButton"),
-            document.getElementById("showAnswerButton")
-        ];
-        var backButtons = [
-            document.getElementById("againButton"),
-            document.getElementById("hardButton"),
-            document.getElementById("goodButton"),
-            document.getElementById("easyButton"),
-            document.getElementById("replayButton")
-        ]
-        function handleNoteClick(note) {
-            playNote(note);
-        }
-        function frontCard(card) {
-            frontButtons.forEach(function (x) { x.hidden = false; });
-            backButtons.forEach(function (x) { x.hidden = true; });
-            currentCard = card;
-            currentNotes = [getStaveNote(currentCard.note1), getStaveNote(currentCard.note2)];
-            displayNotes(renderer, currentNotes, currentCard.keySignature);
-            currentNotes[0].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[0]); };
-        }
-        function backCard() {
-            frontButtons.forEach(function (x) { x.hidden = true; });
-            backButtons.forEach(function (x) { x.hidden = false; });
-            currentNotes[1].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[1]); };
-        }
-        document.getElementById("playButton").addEventListener("click", function () { playNote(currentNotes[0]) });
-        document.getElementById("replayButton").addEventListener("click", function () { playNote(currentNotes[1]) });
-        document.getElementById("showAnswerButton").addEventListener("click", function () {
-            backCard();
-            playNote(currentNotes[1]);
-        });
-        document.getElementById("againButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
-        document.getElementById("hardButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
-        document.getElementById("goodButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
-        document.getElementById("easyButton").addEventListener("click", function () { currentCard = cards[Math.floor(Math.random() * cards.length)]; frontCard(currentCard); playNote(currentNotes[0]); });
-
-        var keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
-        var keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
-        var cards = generateDeck(keySignature);
-        var card = cards[Math.floor(Math.random() * cards.length)];
-        frontCard(card);
-        playNote(currentNotes[0]);
     </script>
 
 </body>
