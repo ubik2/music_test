@@ -12,6 +12,12 @@ const LeechAction = {
     TAG_ONLY: 1
 };
 
+const NewSpread = {
+    NEW_CARDS_DISTRIBUTE: 0,
+    NEW_CARDS_LAST: 1,
+    NEW_CARDS_FIRST: 2
+};
+
 export class Deck {
     /**
      * Create a new Deck
@@ -25,16 +31,19 @@ export class Deck {
         this.creation = Deck.intNow(); // seconds since epoch when deck was created
         this.globalConfig = { // TODO: this belongs higher level than the deck
             rollover: 4,
-            collapseTime: 1
+            collapseTime: 1,
+            newSpread: NewSpread.NEW_CARDS_DISTRIBUTE,
+            dayLearnFirst: false
         };
-        this.mDayCutoff = this.dayCutoff(); // messy name
+        this.dayCutoff = this.dayCutoffInternal(); // messy name
         this.today = this.daysSinceCreation();
+        this.queueLimit = 50;
         // For these config properties, I kept the anki names, to facilitate sharing JSON config
         this.config = { // TODO: these should be loaded as user preferences
             new: {
                 delays: [1, 10],
                 ints: [1, 4, 7],
-                initialFactor: 1, // ??
+                initialFactor: 2500, // STARTING_FACTOR
                 perDay: 20,
                 bury: false
                 // separate, order
@@ -51,17 +60,24 @@ export class Deck {
                 perDay: 200,
                 ease4: 1.3,
                 fuzz: 0.05,
+                ivlFct: 1,
+                maxIvl: 36500,
                 bury: false,
-                hardFactor: 1.2,
-                ivlFct: 1
+                hardFactor: 1.2
             }
         };
         // anki stores id in these (or a tuple of due and id for the learnQueue), but i'm just storing cards
-        // at some point, i'll want to switch it back, since i'll serialize all this
+        // at some point, i may want to switch it back, since i'll serialize all this
         this.newQueue = [];
         this.learnQueue = [];
         this.learnDayQueue = []; 
         this.reviewQueue = [];
+        this.haveQueues = false;
+        this.newCount = 0;
+        this.reviewCount = 0;
+        this.learnCount = 0;
+        this.newCardModulus = 0;
+        this.learnCutoff = 0;
     }
 
     addCard(card) {
@@ -78,11 +94,214 @@ export class Deck {
     }
 
     shuffleDeck() {
-        this.cards = Deck.shuffledCards(this.cards);
+        this.cards = this.shuffledCards(this.cards);
     }
 
     // Most of this is from the Anki scheduling
-    dayCutoff() {
+    getCardInternal() {
+        let card = this.getLearnCard();
+        if (card != null) {
+            return card;
+        }
+        // new first, or time for one?
+        if (this.timeForNewCard()) {
+            card = this.getNewCard();
+            if (card != null) {
+                return card;
+            }
+        }
+        // day learning first and card due?
+        const dayLearnFirst = this.globalConfig.dayLearnFirst;
+        if (dayLearnFirst) {
+            card = this.getLearnDayCard();
+            if (card != null) {
+                return card;
+            }
+        }
+        // card due for review?
+        card = this.getReviewCard();
+        if (card != null) {
+            return card;
+        }
+        // day learning card due?
+        if (!dayLearnFirst) {
+            card = this.getLearnDayCard();
+            if (card != null) {
+                return card;
+            }
+        }
+        // new cards left?
+        card = this.getNewCard();
+        if (card != null) {
+            return card;
+        }
+        // collapse or finish
+        return this.getLearnCard(true);
+    }
+
+    resetNewCount() {
+        this.newCount = this.cards.reduce((n, card) => n + (card.cardType === CardType.NEW), 0);
+    }
+
+    resetNew() {
+        this.resetNewCount();
+        this.newQueue.splice(0);
+        this.updateNewCardRatio();
+    }
+
+    fillNew() {
+        if (this.newQueue.length > 0) {
+            return true;
+        }
+        if (this.newCount === 0) {
+            return false;
+        }
+        this.newQueue.splice(0);
+        const limit = this.queueLimit;
+        if (limit > 0) {
+            const newCards = this.cards.filter(card => card.cardType === CardType.NEW);
+            newCards.sort((card1, card2) => card1.due - card2.due);
+            this.newQueue = newCards;
+            this.newQueue.splice(limit);
+            if (this.newQueue.length > 0) {
+                return true;
+            }
+        }
+        if (this.newCount !== 0) {
+            this.resetNew();
+            return this.fillNew();
+        }
+        return false;
+    }
+
+    getNewCard() {
+        if (this.fillNew()) {
+            this.newCount -= 1;
+            return this.newQueue.shift();
+        }
+    }
+
+    updateNewCardRatio() {
+        if (this.globalConfig.newSpread === NewSpread.NEW_CARDS_DISTRIBUTE) {
+            if (this.newCount != 0) {
+                this.newCardModulus = (this.newCount + this.reviewCount) / this.newCount;
+                // if there are cards to review, ensure modulo >= 2
+                if (this.reviewCount != 0) {
+                    this.newCardModulus = Math.max(2, this.newCardModulus);
+                }
+                return;
+            }
+        }
+        this.newCardModulus = 0;
+    }
+
+    timeForNewCard() {
+        if (this.newCount === 0) {
+            return false;
+        }
+        const spread = this.globalConfig.newSpread;
+        if (spread === NewSpread.NEW_CARDS_LAST) {
+            return false;
+        } else if (spread === NewSpread.NEW_CARDS_FIRST) {
+            return true;
+        } else if (this.newCardModulus !== 0) {
+            return this.repetitions !== 0 && (this.repetitions % this.newCardModulus === 0);
+        } else {
+            return false;
+        }
+    }
+
+    updateLearnCutoff(force) {
+        const nextCutoff = Deck.intNow() + this.globalConfig.collapseTime;
+        if (nextCutoff - this.learnCutoff > 60 || force) {
+            this.learnCutoff = nextCutoff;
+            return true;
+        }
+        return false;
+    }
+
+    maybeResetLearn(force) {
+        if (this.updateLearnCutoff(force)) {
+            this.resetLearn();
+        }
+    }
+
+    resetLearnCount() {
+        // sub-day
+        this.learnCount = this.cards.reduce((n, card) => n + (card.queue === Queue.LEARN && card.due < this.learnCutoff), 0);
+        // day
+        this.learnCount += this.cards.reduce((n, card) => n + (card.queue === Queue.LEARN_DAY && card.due <= this.today), 0);
+        // previews
+        this.learnCount += this.cards.reduce((n, card) => n + (card.queue === Queue.PREVIEW), 0);
+    }
+
+    resetLearn() {
+        this.updateLearnCutoff(true);
+        this.resetLearnCount();
+        this.learnQueue.splice(0);
+        this.learnDayQueue.splice(0);
+    }
+
+    fillLearn() {
+        if (this.learnCount === 0) {
+            return false;
+        }
+        if (this.learnQueue.length !== 0) {
+            return true;
+        }
+        const cutoff = Deck.intNow() + this.globalConfig.collapseTime;
+    }
+
+    getLearnCard(collapse = false) {
+        this.maybeResetLearn(collapse && this.learnCount === 0);
+        if (this.fillLearn()) {
+            let cutoff = Deck.intNow();
+            if (collapse) {
+                cutoff += this.globalConfig.collapseTime;
+            }
+            if (this.learnQueue[0].due < cutoff) {
+                this.learnCount -= 1;
+                return this.learnQueue.shift();
+            }
+        }
+    }
+
+    fillLearnDay() {
+        if (this.learnCount === 0) {
+            return false;
+        }
+        if (this.learnDayQueue.length !== 0) {
+            return true;
+        }
+        this.learnDayQueue = this.cards.filter(card => card.queue === Queue.LEARN_DAY && card.due <= this.today);
+        this.learnDayQueue.splice(this.queueLimit);
+        this.learnDayQueue = this.shuffledCards(this.learnDayQueue);
+        if (this.learnDayQueue.length > 0) {
+            return true;
+        }
+    }
+
+    getLearnDayCard() {
+        if (this.fillLearnDay()) {
+            this.learnCount -= 1;
+            return this.learnDayQueue.shift();
+        }
+        return null;
+    }
+
+    updateCutoff() {
+        const oldToday = this.today === null ? 0 : this.today;
+        // days since col created
+        this.today = this.daysSinceCreation();
+        // end of day cutoff
+        this.dayCutoff = this.dayCutoffInternal();
+        if (oldToday !== this.today) {
+            console.log(this.today, this.todayCutoff);
+        }
+        // TODO: Unbury
+    }
+
+    dayCutoffInternal() {
         let rolloverTime = this.globalConfig.rollover || 4;
         if (rolloverTime < 0) {
             rolloverTime = 24 + rolloverTime;
@@ -107,6 +326,36 @@ export class Deck {
         startDate.setMilliseconds(0);
 
         return Math.floor(((Date.now() - startDate.getTime()) / 1000) / 86400);
+    }
+
+    checkDay() {
+        // check if the day has rolled over
+        if (Deck.intNow() > this.dayCutoff) {
+            this.reset();
+        }
+    }
+
+    getCard() {
+        this.checkDay();
+        if (!this.haveQueues) {
+            this.reset();
+        }
+        const card = this.getCardInternal();
+        if (card != null) {
+            console.log(card);
+            this.repetitions += 1;
+            // start timer?
+            return card;
+        }
+        return null;
+    }
+
+    reset() {
+        this.updateCutoff();
+        this.resetLearn();
+        this.resetReview();
+        this.resetNew();
+        this.haveQueues = true;
     }
 
     answerCard(card, ease) {
@@ -137,6 +386,58 @@ export class Deck {
         // TODO: ODue handling
     }
 
+    currentReviewLimit() {
+        return this.config.review.perDay;
+    }
+
+    resetReviewCount() {
+        const limit = this.currentReviewLimit();
+        const reviewCount = this.cards.reduce((n, card) => n + (card.queue === Queue.REVIEW && card.due <= this.today), 0);
+        this.reviewCount = Math.min(reviewCount, limit);
+    }
+
+    resetReview() {
+        this.resetReviewCount();
+        this.reviewQueue.splice(0);
+    }
+
+
+    fillReview() {
+        if (this.reviewQueue.length !== 0) {
+            return true;
+        }
+        if (this.reviewCount === 0) {
+            return false;
+        }
+        const limit = Math.min(this.queueLimit, this.currentReviewLimit());
+        if (limit !== 0) {
+            this.reviewQueue.splice(0);
+            // fill the queue
+            const reviewCards = this.cards.filter(card => card.queue === Queue.REVIEW && card.due <= this.today);
+            reviewCards.sort((card1, card2) => card1.due - card2.due);
+            this.reviewQueue = reviewCards;
+            this.reviewQueue.splice(limit);
+            this.reviewQueue = this.shuffledCards(this.reviewQueue);
+            if (this.reviewQueue.length > 0) {
+                return true;
+            }
+        }
+        if (this.reviewCount > 0) {
+            this.resetReview();
+            return this.fillReview();
+        }
+        return false;
+    }
+
+    getReviewCard() {
+        if (this.fillReview()) {
+            this.reviewCount -= 1;
+            return this.reviewQueue.shift();
+        } else {
+            return null;
+        }
+    }
+
     answerReviewCard(card, ease) {
         let delay = 0;
         // TODO: original deck? perhaps relearn
@@ -149,7 +450,6 @@ export class Deck {
         }
         this.logReview(card, ease, delay, type);
     }
-
 
     rescheduleLapse(card) {
         const conf = this.lapseConfig(card);
@@ -171,6 +471,36 @@ export class Deck {
             delay = 0;
         }
         return delay;
+    }
+
+    lapseInterval(card, conf) {
+        const interval = Math.max(1, Math.max(conf.minInt, Math.floor(card.interval * conf.mult)));
+        return interval;
+    }
+
+    rescheduleReview(card, ease, early) {
+        // update interval
+        card.lastInterval = card.interval;
+        if (early) {
+            this.updateEarlyReviewInterval(card, ease);
+        } else {
+            this.updateReviewInterval(card, ease);
+        }
+
+        // then the rest
+        let factorAdditionValue;
+        if (ease === Ease.HARD) {
+            factorAdditionValue = -150;
+        } else if (ease === Ease.GOOD) {
+            factorAdditionValue = 0;
+        } else if (ease === Ease.EASY) {
+            factorAdditionValue = 150;
+        }
+        card.factor = Math.max(1300, card.factor + factorAdditionValue);
+        card.due = this.today + card.interval;
+
+        // card leaves filtered deck
+        this.removeFromFiltered(card);
     }
 
     answerLearnCard(card, ease) {
@@ -207,6 +537,22 @@ export class Deck {
         this.logLearn(card, ease, conf, leaving, type, lastLeft);
     }
 
+    updateReviewIntervalOnFail(card, conf) {
+        card.lastInterval = card.interval;
+        card.interval = this.lapseInterval(card, conf);
+    }
+
+    moveToFirstStep(card, conf) {
+        card.left = this.startingLeft(card);
+
+        // relearning card?
+        if (card.cardType === CardType.RELEARN) {
+            this.updateReviewIntervalOnFail(card, conf);
+        }
+
+        return this.rescheduleLearnCard(card, conf);
+    }
+
     moveToNextStep(card, conf) {
         // decrement real left count and recalculate left today
         const left = (card.left % 1000) - 1;
@@ -214,19 +560,23 @@ export class Deck {
         this.rescheduleLearnCard(card, conf);
     }
 
+    repeatStep(card, conf) {
+        const delay = this.delayForRepeatingGrade(conf, card.left);
+        this.rescheduleLearnCard(card, conf, delay);
+    }
+
     rescheduleLearnCard(card, conf, delay = null) {
         // normal delay for the current step?
         if (delay == null) {
             delay = this.delayForGrade(conf, card.left);
-       
         }
         card.due = Deck.intNow() + delay;
         // due today?
-        if (card.due < this.mDayCutoff) {
+        if (card.due < this.dayCutoff) {
             // Add some randomness, up to 5 minutes or 25%
             const maxExtra = Math.floor(Math.min(300, Math.floor(delay * 0.25)));
-            const fuzz = Math.floor(Math.random() * maxExtra);
-            card.due = Math.min(this.mDayCutoff - 1, card.due + fuzz);
+            const fuzz = Math.floor(this.random() * maxExtra);
+            card.due = Math.min(this.dayCutoff - 1, card.due + fuzz);
             card.queue = Queue.LEARN;
             if (card.due < (Deck.intNow() + this.globalConfig.collapseTime)) {
                 this.learnCount += 1;
@@ -241,7 +591,7 @@ export class Deck {
             }
         } else {
             // the card is due in one or more days, so we need to use the day learn queue
-            const ahead = ((card.due - this.mDayCutoff) / 86400) + 1;
+            const ahead = ((card.due - this.dayCutoff) / 86400) + 1;
             card.due = this.today + ahead;
             card.queue = Queue.LEARN_DAY;
         }
@@ -256,54 +606,8 @@ export class Deck {
             conf = this.learnConfig(card);
         }
         const total = conf.delays.length;
-        const today = Deck.leftToday(conf.delays, total);
+        const today = this.leftToday(conf.delays, total);
         return total + today * 1000;
-    }
-
-    static leftToday(delays, left, now = 0) {
-        if (now === 0) {
-            now = Deck.intNow();
-        }
-        let ok = 0;
-        const offset = Math.min(left, delays.length);
-        for (let i = 0; i < offset; i++) {
-            now += delays[delays.length - offset + i] * 60;
-            if (now > this.dayCutoff) {
-                break;
-            }
-            ok = i;
-        }
-        return ok + 1;
-    }
-
-    static lapseInterval(card, conf) {
-        const interval = Math.max(1, Math.max(conf.minInt, Math.floor(card.interval * conf.mult)));
-        return interval;
-    }
-
-    rescheduleReview(card, ease, early) {
-        // update interval
-        card.lastInterval = card.interval;
-        if (early) {
-            this.updateEarlyReviewInterval(card, ease);
-        } else {
-            this.updateReviewInterval(card, ease);
-        }
-
-        // then the rest
-        let factorAdditionValue;
-        if (ease === Ease.HARD) {
-            factorAdditionValue = -150;
-        } else if (ease === Ease.GOOD) {
-            factorAdditionValue = 0;
-        } else if (ease === Ease.EASY) {
-            factorAdditionValue = 150;
-        }
-        card.factor = Math.max(1300, card.factor + factorAdditionValue);
-        card.due = this.today + card.interval;
-
-        // card leaves filtered deck
-        this.removeFromFiltered(card);
     }
 
     removeFromFiltered(card) {
@@ -314,12 +618,15 @@ export class Deck {
     newConfig(card) {
         return this.config.new;
     }
+
     lapseConfig(card) {
         return this.config.lapse;
     }
+
     reviewConfig(card) {
         return this.config.review;
     }
+
     learnConfig(card) {
         if (card.cardType == CardType.REVIEW || card.cardType == CardType.RELEARN) {
             return this.lapseConfig(card);
@@ -344,14 +651,14 @@ export class Deck {
     }
 
     leftToday(delays, left, now = 0) {
-        if (now == 0) {
+        if (now === 0) {
             now = Deck.intNow();
         }
         let ok = 0;
         const offset = Math.min(left, delays.length);
         for (let i = 0; i < offset; i++) {
             now += delays[delays.length - offset + i] * 60;
-            if (now > this.mDayCutoff) {
+            if (now > this.dayCutoff) {
                 break;
             }
             ok = i;
@@ -386,11 +693,35 @@ export class Deck {
     }
 
     previewingCard(card) {
+        // TODO: add support for per-card configurations
         return false;
     }
 
     nextInterval(card, ease) {
-
+        if (this.previewingCard(card)) {
+            if (ease === Ease.FAIL) {
+                return this.previewDelay(card);
+            }
+            return 0;
+        }
+        if (card.queue === Queue.NEW || card.queue === Queue.LEARN || card.queue === Queue.LEARN_DAY) {
+            return this.nextLearnInterval(card, ease);
+        } else if (ease === Ease.FAIL) {
+            // lapse
+            const conf = this.lapseConfig(card);
+            if (conf.delays.length > 0) {
+                return conf.delays[0] * 60;
+            }
+            return this.lapseInterval(card, conf) * 86400;
+        } else {
+            // review
+            const early = false; // TODO: support ODid/ODue
+            if (early) {
+                return this.earlyReviewInterval(card, ease) * 86400;
+            } else {
+                return this.nextReviewInterval(card, ease, false) * 86400;
+            }
+        }
     }
 
     nextLearnInterval(card, ease) {
@@ -437,7 +768,7 @@ export class Deck {
         return intervalEasy;
     }
 
-    // TODO: not implemented
+    // TODO: not implemented, since we're currently only supporting cards from the current deck
     earlyReviewInterval(card, ease) {
         if (card.cardType !== CardType.REVIEW || card.factor == 0) {
             throw "Unexpected card parameters";
@@ -446,13 +777,32 @@ export class Deck {
             throw "Ease must be greater than 1";
         }
 
-        const elapsed = card.interval + mToday;
+        const elapsed = card.interval + this.today;
         // TODO: more
+    }
+
+    checkLeech(card, conf) {
+        const leechFails = conf.leechFails;
+        if (leechFails === 0) {
+            return false;
+        }
+        // if over threshold or every half threshold reps after that
+        if (card.lapses >= leechFails && (card.lapses - l) % Math.floor(Math.max(leechFails / 2, 1)) === 0) {
+            // TODO: add a leech tag
+            // handle
+            if (conf.leechAction === LeechAction.SUSPEND) {
+                card.queue = Queue.SUSPENDED;
+            }
+            // notify UI
+            console.log("Encountered leech card: ", card.id);
+            return true;
+        }
+        return false;
     }
 
     static fuzzedInterval(interval) {
         const minMax = Deck.fuzzedIntervalRange(interval);
-        return Math.floor(Math.random() * (minMax[1] - minMax[0] + 1)) + minMax[0];
+        return Math.floor(this.random() * (minMax[1] - minMax[0] + 1)) + minMax[0];
     }
 
     static fuzzedIntervalRange(interval) {
@@ -466,13 +816,15 @@ export class Deck {
         } else if (interval < 30) {
             fuzz = Math.max(2, Math.floor(interval * 0.15));
         } else {
-            fuzz = Math.max(fuzz, 1);
+            fuzz = Math.max(4, Math.floor(interval * 0.05));
         }
-        return [inteval - fuzz, interval + fuzz];
+        // fuzz at least a day
+        fuzz = Math.max(fuzz, 1);
+        return [interval - fuzz, interval + fuzz];
     }
 
     static constrainedInterval(interval, conf, prev, fuzz) {
-        let newInterval = interval * (conf.ivlFct || 1);
+        let newInterval = Math.floor(interval * (conf.ivlFct || 1));
         if (fuzz) {
             newInterval = Deck.fuzzedInterval(newInterval);
         }
@@ -491,7 +843,6 @@ export class Deck {
     updateReviewInterval(card, ease) {
         card.interval = this.nextReviewInterval(card, ease, true);
     }
-
 
     updateEarlyReviewInterval(card, ease) {
         card.interval = this.earlyReviewInterval(card, ease);
@@ -535,14 +886,19 @@ export class Deck {
         console.log(card.id, ease, ((delay !== 0) ? (-delay) : card.interval), card.lastInterval, card.factor, /* card.timeTaken */ 0, type);
     }
 
+    // Call this instead, so we can better test things by providing a mock random
+    random() {
+        return Math.random();
+    }
+
     static intNow() {
         return Math.floor(Date.now() / 1000);
     }
 
-    static shuffledCards(cards) {
+    shuffledCards(cards) {
         const shuffledCards = cards.slice(0, cards.length);
         for (let shuffleIndex = 0; shuffleIndex < shuffledCards.length; shuffleIndex++) {
-            const randomIndex = shuffleIndex + Math.floor(Math.random() * (shuffledCards.length - shuffleIndex));
+            const randomIndex = shuffleIndex + Math.floor(this.random() * (shuffledCards.length - shuffleIndex));
             const tmpCard = shuffledCards[shuffleIndex];
             shuffledCards[shuffleIndex] = shuffledCards[randomIndex];
             shuffledCards[randomIndex] = tmpCard;

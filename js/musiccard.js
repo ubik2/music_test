@@ -30,6 +30,8 @@ export class MusicCard {
         this.note2 = note2;
         this.cardType = CardType.NEW;
         this.left = 0;
+        this.interval = 0;
+        this.lapses = 0;
         // scheduling properties
         this.factor = 1;
         this.due = 0;

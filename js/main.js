@@ -1,4 +1,4 @@
-﻿import { MusicCard, Queue, CardType } from "./musiccard";
+﻿import { MusicCard } from "./musiccard";
 import { Deck, Ease } from "./deck";
 import Vex from "../node_modules/vexflow/src/index";
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
@@ -131,35 +131,49 @@ function setupPage() {
     ];
     function nextCard(ease) {
         deck.answerCard(currentCard, ease);
-        frontCard(deck.cards[0]);
-        playNote(currentNotes[0]); 
+        const card = deck.getCard();
+        if (card == null) {
+            message('Done for the day');
+            return;
+        } else {
+            frontCard(card);
+            playNote(currentNotes[0]);
+        }
     }
     function handleNoteClick(note) {
         playNote(note);
     }
     function frontCard(card) {
-        frontButtons.forEach(function (x) { x.hidden = false; });
-        backButtons.forEach(function (x) { x.hidden = true; });
+        frontButtons.forEach(el => el.hidden = false);
+        backButtons.forEach(el => el.hidden = true);
         currentCard = card;
         currentNotes = [getStaveNote(currentCard.note1), getStaveNote(currentCard.note2)];
         displayNotes(renderer, currentNotes, currentCard.keySignature);
         currentNotes[0].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[0]); };
     }
     function backCard() {
-        frontButtons.forEach(function (x) { x.hidden = true; });
-        backButtons.forEach(function (x) { x.hidden = false; });
-        currentNotes[1].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[1]); };
+        frontButtons.forEach(el => el.hidden = true);
+        backButtons.forEach(el => el.hidden = false);
+        currentNotes[1].attrs.el.onclick = (e) => handleNoteClick(currentNotes[1]);
     }
-    document.getElementById("playButton").addEventListener("click", function () { playNote(currentNotes[0]) });
-    document.getElementById("replayButton").addEventListener("click", function () { playNote(currentNotes[1]) });
-    document.getElementById("showAnswerButton").addEventListener("click", function () {
+    function message(str) {
+        frontButtons.forEach(el => el.hidden = true);
+        backButtons.forEach(el => el.hidden = true);
+        const el = document.getElementById("message");
+        el.innerText = str;
+        el.hidden = false;
+    }
+
+    document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
+    document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
+    document.getElementById("showAnswerButton").addEventListener("click", () => {
         backCard();
         playNote(currentNotes[1]);
     });
-    document.getElementById("againButton").addEventListener("click", function () { nextCard(Ease.FAIL); });
-    document.getElementById("hardButton").addEventListener("click", function () { nextCard(Ease.HARD); });
-    document.getElementById("goodButton").addEventListener("click", function () { nextCard(Ease.GOOD); });
-    document.getElementById("easyButton").addEventListener("click", function () { nextCard(Ease.EASY); });
+    document.getElementById("againButton").addEventListener("click", () => nextCard(Ease.FAIL));
+    document.getElementById("hardButton").addEventListener("click",  () => nextCard(Ease.HARD));
+    document.getElementById("goodButton").addEventListener("click",  () => nextCard(Ease.GOOD));
+    document.getElementById("easyButton").addEventListener("click",  () => nextCard(Ease.EASY));
 
     //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
     //const otherOptions = ["Cb", "F#", "C#"];
