@@ -1,4 +1,5 @@
-import { MusicCard, Queue, CardType } from "./musiccard";
+import { Card, Queue, CardType } from "./card";
+import { Logger, Random, DateUtil } from "./utils";
 
 export const Ease = {
     FAIL: 1,
@@ -21,14 +22,20 @@ const NewSpread = {
 export class Deck {
     /**
      * Create a new Deck
-     * @param {Array.<MusicCard>} cards cards to include in deck (or null)
+     * @param {Array.<Card>} cards cards to include in deck (or null)
+     * @param {Logger} logger the Logger used to log message or null for the default implementation
+     * @param {Random} random the Random object used to generate random values or null for the default implementation
+     * @param {DateUtil} dateUtil the DateUtil object used to fetch the current time or null for the default implementation
      */
-    constructor(cards) {
+    constructor(cards, logger = null, random = null, dateUtil = null) {
         this.cards = cards || [];
+        this.logger = logger || new Logger();
+        this.random = random || new Random();
+        this.dateUtil = dateUtil || new DateUtil();
         this.newToday = 0;
         this.reviewToday = 0;
         this.learnToday = 0;
-        this.creation = Deck.intNow(); // seconds since epoch when deck was created
+        this.creation = this.intNow(); // seconds since epoch when deck was created
         this.globalConfig = { // TODO: this belongs higher level than the deck
             rollover: 4,
             collapseTime: 1,
@@ -38,6 +45,7 @@ export class Deck {
         this.dayCutoff = this.dayCutoffInternal(); // messy name
         this.today = this.daysSinceCreation();
         this.queueLimit = 50;
+        this.reportLimit = 99999;
         // For these config properties, I kept the anki names, to facilitate sharing JSON config
         this.config = { // TODO: these should be loaded as user preferences
             new: {
@@ -212,7 +220,7 @@ export class Deck {
     }
 
     updateLearnCutoff(force) {
-        const nextCutoff = Deck.intNow() + this.globalConfig.collapseTime;
+        const nextCutoff = this.intNow() + this.globalConfig.collapseTime;
         if (nextCutoff - this.learnCutoff > 60 || force) {
             this.learnCutoff = nextCutoff;
             return true;
@@ -249,13 +257,16 @@ export class Deck {
         if (this.learnQueue.length !== 0) {
             return true;
         }
-        const cutoff = Deck.intNow() + this.globalConfig.collapseTime;
+        const cutoff = this.intNow() + this.globalConfig.collapseTime;
+        this.learnQueue = this.cards.filter(card => (card.queue === Queue.LEARN || card.queue === Queue.PREVIEW) && card.due < cutoff);
+        this.learnQueue.splice(this.reportLimit);
+        return this.learnQueue.length > 0;
     }
 
     getLearnCard(collapse = false) {
         this.maybeResetLearn(collapse && this.learnCount === 0);
         if (this.fillLearn()) {
-            let cutoff = Deck.intNow();
+            let cutoff = this.intNow();
             if (collapse) {
                 cutoff += this.globalConfig.collapseTime;
             }
@@ -276,9 +287,7 @@ export class Deck {
         this.learnDayQueue = this.cards.filter(card => card.queue === Queue.LEARN_DAY && card.due <= this.today);
         this.learnDayQueue.splice(this.queueLimit);
         this.learnDayQueue = this.shuffledCards(this.learnDayQueue);
-        if (this.learnDayQueue.length > 0) {
-            return true;
-        }
+        return this.learnDayQueue.length > 0;
     }
 
     getLearnDayCard() {
@@ -296,7 +305,7 @@ export class Deck {
         // end of day cutoff
         this.dayCutoff = this.dayCutoffInternal();
         if (oldToday !== this.today) {
-            console.log(this.today, this.todayCutoff);
+            this.logger.log(this.today, this.todayCutoff);
         }
         // TODO: Unbury
     }
@@ -325,12 +334,12 @@ export class Deck {
         startDate.setSeconds(0);
         startDate.setMilliseconds(0);
 
-        return Math.floor(((Date.now() - startDate.getTime()) / 1000) / 86400);
+        return Math.floor(((this.dateUtil.now() - startDate.getTime()) / 1000) / 86400);
     }
 
     checkDay() {
         // check if the day has rolled over
-        if (Deck.intNow() > this.dayCutoff) {
+        if (this.intNow() > this.dayCutoff) {
             this.reset();
         }
     }
@@ -342,7 +351,7 @@ export class Deck {
         }
         const card = this.getCardInternal();
         if (card != null) {
-            console.log(card);
+            this.logger.log(card);
             this.repetitions += 1;
             // start timer?
             return card;
@@ -570,15 +579,15 @@ export class Deck {
         if (delay == null) {
             delay = this.delayForGrade(conf, card.left);
         }
-        card.due = Deck.intNow() + delay;
+        card.due = this.intNow() + delay;
         // due today?
         if (card.due < this.dayCutoff) {
             // Add some randomness, up to 5 minutes or 25%
             const maxExtra = Math.floor(Math.min(300, Math.floor(delay * 0.25)));
-            const fuzz = Math.floor(this.random() * maxExtra);
+            const fuzz = Math.floor(this.random.random() * maxExtra);
             card.due = Math.min(this.dayCutoff - 1, card.due + fuzz);
             card.queue = Queue.LEARN;
-            if (card.due < (Deck.intNow() + this.globalConfig.collapseTime)) {
+            if (card.due < (this.intNow() + this.globalConfig.collapseTime)) {
                 this.learnCount += 1;
                 // if the queue is not empty and there's nothing else to do, make
                 // sure we don't put it at the head of the queue and end up showing
@@ -652,7 +661,7 @@ export class Deck {
 
     leftToday(delays, left, now = 0) {
         if (now === 0) {
-            now = Deck.intNow();
+            now = this.intNow();
         }
         let ok = 0;
         const offset = Math.min(left, delays.length);
@@ -794,7 +803,7 @@ export class Deck {
                 card.queue = Queue.SUSPENDED;
             }
             // notify UI
-            console.log("Encountered leech card: ", card.id);
+            this.logger.log("Encountered leech card: ", card.id);
             return true;
         }
         return false;
@@ -802,7 +811,7 @@ export class Deck {
 
     static fuzzedInterval(interval) {
         const minMax = Deck.fuzzedIntervalRange(interval);
-        return Math.floor(this.random() * (minMax[1] - minMax[0] + 1)) + minMax[0];
+        return Math.floor(this.random.random() * (minMax[1] - minMax[0] + 1)) + minMax[0];
     }
 
     static fuzzedIntervalRange(interval) {
@@ -879,26 +888,21 @@ export class Deck {
     logLearn(card, ease, conf, leaving, type, lastLeft) {
         const lastInterval = this.delayForGrade(conf, lastLeft);
         const interval = leaving ? card.interval : -(this.delayForGrade(conf, card.left));
-        console.log(card.id, ease, interval, lastInterval, card.factor, /* card.timeTaken */ 0, type);
+        this.logger.log(card.id, ease, interval, lastInterval, card.factor, /* card.timeTaken */ 0, type);
     }
 
     logReview(card, ease, delay, type) {
-        console.log(card.id, ease, ((delay !== 0) ? (-delay) : card.interval), card.lastInterval, card.factor, /* card.timeTaken */ 0, type);
+        this.logger.log(card.id, ease, ((delay !== 0) ? (-delay) : card.interval), card.lastInterval, card.factor, /* card.timeTaken */ 0, type);
     }
 
-    // Call this instead, so we can better test things by providing a mock random
-    random() {
-        return Math.random();
-    }
-
-    static intNow() {
-        return Math.floor(Date.now() / 1000);
+    intNow() {
+        return Math.floor(this.dateUtil.now() / 1000);
     }
 
     shuffledCards(cards) {
         const shuffledCards = cards.slice(0, cards.length);
         for (let shuffleIndex = 0; shuffleIndex < shuffledCards.length; shuffleIndex++) {
-            const randomIndex = shuffleIndex + Math.floor(this.random() * (shuffledCards.length - shuffleIndex));
+            const randomIndex = shuffleIndex + Math.floor(this.random.random() * (shuffledCards.length - shuffleIndex));
             const tmpCard = shuffledCards[shuffleIndex];
             shuffledCards[shuffleIndex] = shuffledCards[randomIndex];
             shuffledCards[randomIndex] = tmpCard;
