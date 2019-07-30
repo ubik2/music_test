@@ -1,9 +1,9 @@
-import { Deck } from "./deck";
-import { Logger, TestRandom, TestDateUtil } from "./utils";
+import { Deck, Ease } from "./deck";
+import { Logger, DummyLogger, TestRandom, TestDateUtil } from "./utils";
 import { MusicCard } from "./musiccard";
 
+let testLogger = new DummyLogger();
 let testRandom = new TestRandom();
-testRandom.appendRandom([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 let testDateUtil = new TestDateUtil();
 testDateUtil.setNow(1563425466519);
 
@@ -20,11 +20,23 @@ function generateTestDeck() {
         }
     }
 
-    const deck = new Deck(cards, new Logger(), testRandom, testDateUtil);
+    testRandom.appendRandom([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const deck = new Deck(cards, testLogger, testRandom, testDateUtil);
     return deck;
 }
 
 test('Checks that new deck has 42 cards', () => {
     const deck = generateTestDeck();
     expect(deck.cards.length).toBe(42);
+});
+
+test('Ensure we can answer 20 cards', () => {
+    const deck = generateTestDeck();
+    for (let i = 0; i < 20; i++) {
+        const card = deck.getCard();
+        deck.answerCard(card, Ease.GOOD);
+        expect(deck.cards.length).not.toBeNull();
+    }
+    const badCard = deck.getCard();
+    expect(badCard).toBeNull();
 });

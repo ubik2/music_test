@@ -148,7 +148,9 @@ export class Deck {
     }
 
     resetNewCount() {
-        this.newCount = this.cards.reduce((n, card) => n + (card.cardType === CardType.NEW), 0);
+        const limit = this.deckNewLimit();
+        const newCount = this.cards.reduce((n, card) => n + (card.cardType === CardType.NEW), 0);
+        this.newCount = Math.min(limit, newCount);
     }
 
     resetNew() {
@@ -165,7 +167,7 @@ export class Deck {
             return false;
         }
         this.newQueue.splice(0);
-        const limit = this.queueLimit;
+        const limit = Math.min(this.queueLimit, this.deckNewLimit());
         if (limit > 0) {
             const newCards = this.cards.filter(card => card.cardType === CardType.NEW);
             newCards.sort((card1, card2) => card1.due - card2.due);
@@ -217,6 +219,10 @@ export class Deck {
         } else {
             return false;
         }
+    }
+
+    deckNewLimit() {
+        return Math.max(0, this.config.new.perDay);
     }
 
     updateLearnCutoff(force) {

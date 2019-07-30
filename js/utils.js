@@ -4,6 +4,12 @@ export class Logger {
     }
 }
 
+export class DummyLogger {
+    log(...args) {
+        //console.log(args);
+    }
+}
+
 export class Random {
     random() {
         return Math.random();
