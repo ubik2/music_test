@@ -1,10 +1,40 @@
 export class Logger {
+    trace(...args) {
+        console.trace(args);
+    }
+    debug(...args) {
+        console.debug(args);
+    }
+    info(...args) {
+        console.info(args);
+    }
+    warn(...args) {
+        console.warn(args);
+    }
+    error(...args) {
+        console.error(args);
+    }
     log(...args) {
         console.log(args);
     }
 }
 
 export class DummyLogger {
+    trace(...args) {
+        //console.trace(args);
+    }
+    debug(...args) {
+        //console.debug(args);
+    }
+    info(...args) {
+        //console.info(args);
+    }
+    warn(...args) {
+        console.warn(args);
+    }
+    error(...args) {
+        console.error(args);
+    }
     log(...args) {
         //console.log(args);
     }

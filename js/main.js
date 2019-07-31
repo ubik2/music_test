@@ -1,5 +1,8 @@
 ﻿import { MusicCard } from "./musiccard";
 import { Deck, Ease } from "./deck";
+import { Persistence } from "./persistence";
+import { Logger, Random, DateUtil } from "./utils";
+
 import Vex from "../node_modules/vexflow/src/index";
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
 //import Tone from "./Tone.js"; 
@@ -23,10 +26,9 @@ function generateDeck(keySignature, major = true) {
             cards.push(new MusicCard(keySignature, note1, note2));
         }
     }
-    const deck = new Deck(cards);
+    const deck = new Deck(keySignature, cards);
     return deck;
 }
-
 
 
 function initVexFlow() {
@@ -117,6 +119,7 @@ let currentCard;
 let currentNotes;
 let deck;
 function setupPage() {
+    const persistence = new Persistence();
     const renderer = initVexFlow();
     const frontButtons = [
         document.getElementById("playButton"),
@@ -129,10 +132,36 @@ function setupPage() {
         document.getElementById("easyButton"),
         document.getElementById("replayButton")
     ];
+
+    persistence.whenReady(() => {
+        const keySignature = "C";
+        persistence.loadDeck(keySignature, (success, loadedDeck) => {
+            if (success) {
+                if (loadedDeck === undefined) {
+                    console.log("Generating new deck");
+                    const newDeck = generateDeck(keySignature);
+                    persistence.saveDeck(newDeck, (success, savedDeck) => {
+                        if (success) {
+                            onReady(savedDeck);
+                        } else {
+                            throw "Failed to save newly generated deck";
+                        }
+                    });
+                } else {
+                    console.log("Loaded deck: ", loadedDeck);
+                    onReady(loadedDeck);
+                }
+            } else {
+                throw "Failed to load deck";
+            }
+        });
+    });
+
     function nextCard(ease) {
         deck.answerCard(currentCard, ease);
+        persistence.saveDeck(deck); // we don't bother with a callback, since we don't care
         const card = deck.getCard();
-        if (card == null) {
+        if (card === null) {
             message('Done for the day');
             return;
         } else {
@@ -164,24 +193,26 @@ function setupPage() {
         el.hidden = false;
     }
 
-    document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
-    document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
-    document.getElementById("showAnswerButton").addEventListener("click", () => {
-        backCard();
-        playNote(currentNotes[1]);
-    });
-    document.getElementById("againButton").addEventListener("click", () => nextCard(Ease.FAIL));
-    document.getElementById("hardButton").addEventListener("click",  () => nextCard(Ease.HARD));
-    document.getElementById("goodButton").addEventListener("click",  () => nextCard(Ease.GOOD));
-    document.getElementById("easyButton").addEventListener("click",  () => nextCard(Ease.EASY));
+    function onReady(loadedDeck) {
+        document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
+        document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
+        document.getElementById("showAnswerButton").addEventListener("click", () => {
+            backCard();
+            playNote(currentNotes[1]);
+        });
+        document.getElementById("againButton").addEventListener("click", () => nextCard(Ease.FAIL));
+        document.getElementById("hardButton").addEventListener("click", () => nextCard(Ease.HARD));
+        document.getElementById("goodButton").addEventListener("click", () => nextCard(Ease.GOOD));
+        document.getElementById("easyButton").addEventListener("click", () => nextCard(Ease.EASY));
 
-    //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
-    //const otherOptions = ["Cb", "F#", "C#"];
-    const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
-    deck = generateDeck(keySignature);
-    deck.shuffleDeck();
-    frontCard(deck.cards[0]);
-    playNote(currentNotes[0]);
+        //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
+        //const otherOptions = ["Cb", "F#", "C#"];
+        //const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
+        deck = loadedDeck;
+        //deck.shuffleDeck();
+        frontCard(deck.getCard());
+        playNote(currentNotes[0]);
+    }
 }
 
 setupPage();

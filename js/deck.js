@@ -22,12 +22,14 @@ const NewSpread = {
 export class Deck {
     /**
      * Create a new Deck
+     * @param {String} deckId the id of the deck
      * @param {Array.<Card>} cards cards to include in deck (or null)
      * @param {Logger} logger the Logger used to log message or null for the default implementation
      * @param {Random} random the Random object used to generate random values or null for the default implementation
      * @param {DateUtil} dateUtil the DateUtil object used to fetch the current time or null for the default implementation
      */
-    constructor(cards, logger = null, random = null, dateUtil = null) {
+    constructor(deckId, cards, logger = null, random = null, dateUtil = null) {
+        this.deckId = deckId;
         this.cards = cards || [];
         this.logger = logger || new Logger();
         this.random = random || new Random();
@@ -38,7 +40,7 @@ export class Deck {
         this.creation = this.intNow(); // seconds since epoch when deck was created
         this.globalConfig = { // TODO: this belongs higher level than the deck
             rollover: 4,
-            collapseTime: 1,
+            collapseTime: 1200, // 20 minutes
             newSpread: NewSpread.NEW_CARDS_DISTRIBUTE,
             dayLearnFirst: false
         };
@@ -108,13 +110,13 @@ export class Deck {
     // Most of this is from the Anki scheduling
     getCardInternal() {
         let card = this.getLearnCard();
-        if (card != null) {
+        if (card !== null) {
             return card;
         }
         // new first, or time for one?
         if (this.timeForNewCard()) {
             card = this.getNewCard();
-            if (card != null) {
+            if (card !== null) {
                 return card;
             }
         }
@@ -122,25 +124,25 @@ export class Deck {
         const dayLearnFirst = this.globalConfig.dayLearnFirst;
         if (dayLearnFirst) {
             card = this.getLearnDayCard();
-            if (card != null) {
+            if (card !== null) {
                 return card;
             }
         }
         // card due for review?
         card = this.getReviewCard();
-        if (card != null) {
+        if (card !== null) {
             return card;
         }
         // day learning card due?
         if (!dayLearnFirst) {
             card = this.getLearnDayCard();
-            if (card != null) {
+            if (card !== null) {
                 return card;
             }
         }
         // new cards left?
         card = this.getNewCard();
-        if (card != null) {
+        if (card !== null) {
             return card;
         }
         // collapse or finish
@@ -169,8 +171,8 @@ export class Deck {
         this.newQueue.splice(0);
         const limit = Math.min(this.queueLimit, this.deckNewLimit());
         if (limit > 0) {
-            const newCards = this.cards.filter(card => card.cardType === CardType.NEW);
-            newCards.sort((card1, card2) => card1.due - card2.due);
+            let newCards = this.cards.filter(card => card.cardType === CardType.NEW);
+            newCards = Deck.stableSort(newCards, (card1, card2) => card1.due - card2.due);
             this.newQueue = newCards;
             this.newQueue.splice(limit);
             if (this.newQueue.length > 0) {
@@ -189,14 +191,15 @@ export class Deck {
             this.newCount -= 1;
             return this.newQueue.shift();
         }
+        return null;
     }
 
     updateNewCardRatio() {
         if (this.globalConfig.newSpread === NewSpread.NEW_CARDS_DISTRIBUTE) {
-            if (this.newCount != 0) {
+            if (this.newCount !== 0) {
                 this.newCardModulus = (this.newCount + this.reviewCount) / this.newCount;
                 // if there are cards to review, ensure modulo >= 2
-                if (this.reviewCount != 0) {
+                if (this.reviewCount !== 0) {
                     this.newCardModulus = Math.max(2, this.newCardModulus);
                 }
                 return;
@@ -281,6 +284,7 @@ export class Deck {
                 return this.learnQueue.shift();
             }
         }
+        return null;
     }
 
     fillLearnDay() {
@@ -321,12 +325,12 @@ export class Deck {
         if (rolloverTime < 0) {
             rolloverTime = 24 + rolloverTime;
         }
-        const date = new Date();
+        const date = new Date(this.dateUtil.now());
         date.setHours(rolloverTime);
         date.setMinutes(0);
         date.setSeconds(0);
         date.setMilliseconds(0);
-        const today = new Date();
+        const today = new Date(this.dateUtil.now());
         if (date < today) {
             date.setDate(date.getDate() + 1);
         }
@@ -356,7 +360,7 @@ export class Deck {
             this.reset();
         }
         const card = this.getCardInternal();
-        if (card != null) {
+        if (card !== null) {
             this.logger.log(card);
             this.repetitions += 1;
             // start timer?
@@ -428,8 +432,8 @@ export class Deck {
         if (limit !== 0) {
             this.reviewQueue.splice(0);
             // fill the queue
-            const reviewCards = this.cards.filter(card => card.queue === Queue.REVIEW && card.due <= this.today);
-            reviewCards.sort((card1, card2) => card1.due - card2.due);
+            let reviewCards = this.cards.filter(card => card.queue === Queue.REVIEW && card.due <= this.today);
+            reviewCards = Deck.stableSort(reviewCards, (card1, card2) => card1.due - card2.due);
             this.reviewQueue = reviewCards;
             this.reviewQueue.splice(limit);
             this.reviewQueue = this.shuffledCards(this.reviewQueue);
@@ -448,9 +452,8 @@ export class Deck {
         if (this.fillReview()) {
             this.reviewCount -= 1;
             return this.reviewQueue.shift();
-        } else {
-            return null;
         }
+        return null;
     }
 
     answerReviewCard(card, ease) {
@@ -472,7 +475,7 @@ export class Deck {
         card.factor = Math.max(1300, card.factor - 200);
         let delay;
         const suspended = this.checkLeech(card, conf) && card.queue === Queue.LEARN;
-        if (conf.delays.length != 0 && !suspended) {
+        if (conf.delays.length !== 0 && !suspended) {
             card.cardType = CardType.RELEARN;
             delay = this.moveToFirstStep(card, conf);
         } else {
@@ -582,7 +585,7 @@ export class Deck {
 
     rescheduleLearnCard(card, conf, delay = null) {
         // normal delay for the current step?
-        if (delay == null) {
+        if (delay === null) {
             delay = this.delayForGrade(conf, card.left);
         }
         card.due = this.intNow() + delay;
@@ -598,7 +601,7 @@ export class Deck {
                 // if the queue is not empty and there's nothing else to do, make
                 // sure we don't put it at the head of the queue and end up showing
                 // it twice in a row
-                if (this.learnQueue.length === 0 && this.reviewCount === 0 && this.newCount === 0) {
+                if (this.learnQueue.length !== 0 && this.reviewCount === 0 && this.newCount === 0) {
                     const smallestDue = this.learnQueue[0].due;
                     card.due = Math.max(card.due, smallestDue + 1);
                 }
@@ -643,7 +646,7 @@ export class Deck {
     }
 
     learnConfig(card) {
-        if (card.cardType == CardType.REVIEW || card.cardType == CardType.RELEARN) {
+        if (card.cardType === CardType.REVIEW || card.cardType === CardType.RELEARN) {
             return this.lapseConfig(card);
         } else {
             return this.newConfig(card);
@@ -769,23 +772,23 @@ export class Deck {
         const hardFactor = conf.hardFactor || 1.2;
         const hardMin = (hardFactor > 1) ? card.interval : 0;
 
-        const intervalHard = Deck.constrainedInterval(card.interval * hardFactor, conf, hardMin, fuzz);
+        const intervalHard = this.constrainedInterval(card.interval * hardFactor, conf, hardMin, fuzz);
         if (ease === Ease.HARD) {
             return intervalHard;
         }
 
-        const intervalGood = Deck.constrainedInterval((card.interval + delay / 2) * factor, conf, intervalHard, fuzz);
+        const intervalGood = this.constrainedInterval((card.interval + delay / 2) * factor, conf, intervalHard, fuzz);
         if (ease === Ease.GOOD) {
             return intervalGood;
         }
 
-        const intervalEasy = Deck.constrainedInterval((card.interval + delay) * factor * conf.ease4, conf, intervalGood, fuzz);
+        const intervalEasy = this.constrainedInterval((card.interval + delay) * factor * conf.ease4, conf, intervalGood, fuzz);
         return intervalEasy;
     }
 
     // TODO: not implemented, since we're currently only supporting cards from the current deck
     earlyReviewInterval(card, ease) {
-        if (card.cardType !== CardType.REVIEW || card.factor == 0) {
+        if (card.cardType !== CardType.REVIEW || card.factor === 0) {
             throw "Unexpected card parameters";
         }
         if (ease <= Ease.FAIL) {
@@ -815,7 +818,7 @@ export class Deck {
         return false;
     }
 
-    static fuzzedInterval(interval) {
+    fuzzedInterval(interval) {
         const minMax = Deck.fuzzedIntervalRange(interval);
         return Math.floor(this.random.random() * (minMax[1] - minMax[0] + 1)) + minMax[0];
     }
@@ -824,7 +827,7 @@ export class Deck {
         let fuzz;
         if (interval < 2) {
             return [1, 1];
-        } else if (interval == 2) {
+        } else if (interval === 2) {
             return [2, 3];
         } else if (interval < 7) {
             fuzz = Math.floor(interval * 0.25);
@@ -838,10 +841,10 @@ export class Deck {
         return [interval - fuzz, interval + fuzz];
     }
 
-    static constrainedInterval(interval, conf, prev, fuzz) {
+    constrainedInterval(interval, conf, prev, fuzz) {
         let newInterval = Math.floor(interval * (conf.ivlFct || 1));
         if (fuzz) {
-            newInterval = Deck.fuzzedInterval(newInterval);
+            newInterval = this.fuzzedInterval(newInterval);
         }
 
         newInterval = Math.max(Math.max(newInterval, prev + 1), 1);
@@ -901,8 +904,24 @@ export class Deck {
         this.logger.log(card.id, ease, ((delay !== 0) ? (-delay) : card.interval), card.lastInterval, card.factor, /* card.timeTaken */ 0, type);
     }
 
+    // If the due date is identical, we will put our new card after
+    sortIntoLearn(due, card) {
+        let i;
+        for (i = 0; i < this.learnQueue.length && this.learnQueue[i].due <= due; i++);
+        this.learnQueue.splice(i, 0, card);
+    }
+
     intNow() {
         return Math.floor(this.dateUtil.now() / 1000);
+    }
+
+    static stableSort(arr, cmp) {
+        let arrIndexed = arr.map((el, index) => [el, index]);
+        return arrIndexed.sort((a, b) => {
+            let rv = cmp(a[0], b[0]);
+            if (rv !== 0) return rv;
+            return a[1] - b[1];
+        }).map((el, index) => el[0]);
     }
 
     shuffledCards(cards) {
