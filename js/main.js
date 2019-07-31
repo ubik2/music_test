@@ -192,6 +192,7 @@ function setupPage() {
     function message(str) {
         frontButtons.forEach(el => el.hidden = true);
         backButtons.forEach(el => el.hidden = true);
+        displayNotes(renderer, [], "C");
         const el = document.getElementById("message");
         el.innerText = str;
         el.hidden = false;
