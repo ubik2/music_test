@@ -1,23 +1,20 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
     <title>Music Test</title>
     <link href="css/default.css" rel="stylesheet" />
+    <script type="module" src="js/index.js"></script>
 </head>
-<body>
+<body onload="setupIndexPage()">
     <script>
-        function showCards() {
-            document.getElementById("main").hidden = true;
-            document.getElementById("cards").hidden = false;
-            window.frames["cards"].src = "card.html";
-        }
     </script>
     <div id="main">
         Main Menu
         <table id="decks">
-            <tr><th>SCALE</th><th>TODAY</th><th>LEARNING</th><th>UNSEEN</th></tr>
-            <tr><td>C Major</td><td>0</td><td>0</td><td>42</td><td><button onclick="showCards()">Study Now</button></td></tr>
+            <tr><th>Scale</th><th>New</th><th>Learning</th><th>Review</th></tr>
+            <tr id="deckRow1"><td id="deckScale1">Unknown</td><td id="new1">?</td><td id="learning1">?</td><td id="review1">?</td><td><button id="button1">Study Now</button></td></tr>
+            <tr id="deckRow2"><td id="deckScale2">Unknown</td><td id="new2">?</td><td id="learning2">?</td><td id="review2">?</td><td><button id="button2">Study Now</button></td></tr>
         </table>
     </div>
     <iframe id="cards" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden />

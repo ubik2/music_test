@@ -117,8 +117,8 @@ function playNote(note) {
 
 let currentCard;
 let currentNotes;
-let deck;
-function setupPage() {
+let currentDeck;
+function setupCardPage(deck) {
     const persistence = new Persistence();
     const renderer = initVexFlow();
     const frontButtons = [
@@ -132,33 +132,10 @@ function setupPage() {
         document.getElementById("easyButton"),
         document.getElementById("replayButton")
     ];
-
-    persistence.whenReady(() => {
-        const keySignature = "C";
-        persistence.loadDeck(keySignature, (success, loadedDeck) => {
-            if (success) {
-                if (loadedDeck === undefined) {
-                    console.log("Generating new deck");
-                    const newDeck = generateDeck(keySignature);
-                    persistence.saveDeck(newDeck, (success, savedDeck) => {
-                        if (success) {
-                            onReady(savedDeck);
-                        } else {
-                            throw "Failed to save newly generated deck";
-                        }
-                    });
-                } else {
-                    console.log("Loaded deck: ", loadedDeck);
-                    onReady(loadedDeck);
-                }
-            } else {
-                throw "Failed to load deck";
-            }
-        });
-    });
+    currentDeck = deck;
 
     function getCard() {
-        const card = deck.getCard();
+        const card = currentDeck.getCard();
         if (card === null) {
             message('Done for the day');
             return;
@@ -169,8 +146,8 @@ function setupPage() {
     }
 
     function nextCard(ease) {
-        deck.answerCard(currentCard, ease);
-        persistence.saveDeck(deck); // we don't bother with a callback, since we don't care
+        currentDeck.answerCard(currentCard, ease);
+        persistence.saveDeck(currentDeck); // we don't bother with a callback, since we don't care
         getCard();
     }
     function handleNoteClick(note) {
@@ -192,13 +169,13 @@ function setupPage() {
     function message(str) {
         frontButtons.forEach(el => el.hidden = true);
         backButtons.forEach(el => el.hidden = true);
-        displayNotes(renderer, [], "C");
+        displayNotes(renderer, [], currentDeck.deckId);
         const el = document.getElementById("message");
         el.innerText = str;
         el.hidden = false;
     }
 
-    function onReady(loadedDeck) {
+    function setup() {
         document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
         document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
         document.getElementById("showAnswerButton").addEventListener("click", () => {
@@ -213,10 +190,11 @@ function setupPage() {
         //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
         //const otherOptions = ["Cb", "F#", "C#"];
         //const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
-        deck = loadedDeck;
         //deck.shuffleDeck();
         getCard();
     }
-}
 
-setupPage();
+    setup();
+}
+// Make our setupCardPage function accessible
+window.setupCardPage = setupCardPage;
