@@ -65,9 +65,9 @@ function setupIndexPage() {
         loadedDeck.resetReviewCount();
         const idSuffix = '' + (1 + keySignatures.indexOf(loadedDeck.deckId));
         document.getElementById("deckScale" + idSuffix).innerText = loadedDeck.deckId + ' Major';
-        document.getElementById("new" + idSuffix).innerText = loadedDeck.reviewCount;
+        document.getElementById("new" + idSuffix).innerText = loadedDeck.newCount;
         document.getElementById("learning" + idSuffix).innerText = loadedDeck.learnCount;
-        document.getElementById("review" + idSuffix).innerText = loadedDeck.newCount;
+        document.getElementById("review" + idSuffix).innerText = loadedDeck.reviewCount;
         document.getElementById("button" + idSuffix).onclick = () => showCards(loadedDeck);
     }
 }
