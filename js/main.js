@@ -157,9 +157,7 @@ function setupPage() {
         });
     });
 
-    function nextCard(ease) {
-        deck.answerCard(currentCard, ease);
-        persistence.saveDeck(deck); // we don't bother with a callback, since we don't care
+    function getCard() {
         const card = deck.getCard();
         if (card === null) {
             message('Done for the day');
@@ -168,6 +166,12 @@ function setupPage() {
             frontCard(card);
             playNote(currentNotes[0]);
         }
+    }
+
+    function nextCard(ease) {
+        deck.answerCard(currentCard, ease);
+        persistence.saveDeck(deck); // we don't bother with a callback, since we don't care
+        getCard();
     }
     function handleNoteClick(note) {
         playNote(note);
@@ -210,8 +214,7 @@ function setupPage() {
         //const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
         deck = loadedDeck;
         //deck.shuffleDeck();
-        frontCard(deck.getCard());
-        playNote(currentNotes[0]);
+        getCard();
     }
 }
 
