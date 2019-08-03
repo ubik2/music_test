@@ -115,6 +115,21 @@ function playNote(note) {
     synth.triggerAttackRelease(toneNote, toneDuration);
 }
 
+function playNotes(notes) {
+    const synth = getPianoSynth();
+    const toneEntries = notes.map((note) => { return { time: 0, note: getToneNote(note), dur: '4n'} });
+    for (let i = 0; i < toneEntries.length; i++) {
+        toneEntries[i].time = i ? (4*i) + 'n' : 0;
+    }
+    const part = new Tone.Part((time, event) => {
+        synth.triggerAttackRelease(event.note, event.dur, time);
+    }, toneEntries);
+    part.start(0);
+    part.loop = false;
+    Tone.Transport.stop();
+    Tone.Transport.start();
+}
+
 let currentCard;
 let currentNotes;
 let currentDeck;
@@ -130,7 +145,8 @@ function setupCardPage(deck) {
         document.getElementById("hardButton"),
         document.getElementById("goodButton"),
         document.getElementById("easyButton"),
-        document.getElementById("replayButton")
+        document.getElementById("replayButton"),
+        document.getElementById("replayAllButton")
     ];
     currentDeck = deck;
 
@@ -178,6 +194,7 @@ function setupCardPage(deck) {
     function setup() {
         document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
         document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
+        document.getElementById("replayAllButton").addEventListener("click", () => playNotes(currentNotes));
         document.getElementById("showAnswerButton").addEventListener("click", () => {
             backCard();
             playNote(currentNotes[1]);
