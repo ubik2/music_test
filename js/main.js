@@ -116,6 +116,8 @@ function playNote(note) {
 }
 
 function playNotes(notes) {
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
     const synth = getPianoSynth();
     const toneEntries = notes.map((note) => { return { time: 0, note: getToneNote(note), dur: '4n'} });
     for (let i = 0; i < toneEntries.length; i++) {
@@ -126,7 +128,6 @@ function playNotes(notes) {
     }, toneEntries);
     part.start(0);
     part.loop = false;
-    Tone.Transport.stop();
     Tone.Transport.start();
 }
 
