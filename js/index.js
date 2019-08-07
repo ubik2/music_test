@@ -1,6 +1,7 @@
 ﻿import { MusicCard } from "./musiccard";
 import { Deck, Ease } from "./deck";
 import { Persistence } from "./persistence";
+import { FrequencyAnalyser } from "./frequencyanalyser";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
@@ -31,7 +32,51 @@ function showCards(deck) {
     };
 }
 
+/// Experiments
+
+function setupMicFromPlayer() {
+    const player = document.getElementById('player');
+
+    const handleSuccess = function(stream) {
+        if (window.URL) {
+            player.srcObject = stream;
+        } else {
+            player.src = stream;
+        }
+    };
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        .then(handleSuccess);
+}
+
+function onFrequencyUpdate(noteInfo) {
+    const currentNoteElement = document.getElementById('currentNote');
+    currentNoteElement.innerText = noteInfo.note + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
+    //console.log(noteInfo.frequency);
+}
+
+function setupMic() {
+    const frequencyAnalyser = new FrequencyAnalyser(navigator);
+    frequencyAnalyser.onFrequencyUpdateHandlers.push(onFrequencyUpdate);
+}
+
+function checkForMicrophoneAccess() {
+    // Just boilerplate for filling in later with proper code
+    navigator.permissions.query({name:'microphone'}).then(function(result) {
+        if (result.state == 'granted') {
+      
+        } else if (result.state == 'prompt') {
+      
+        } else if (result.state == 'denied') {
+      
+        }
+        result.onchange = function() {
+      
+        };
+    });
+}
+
 function setupIndexPage() {
+    setupMic();
     const persistence = new Persistence();
     persistence.whenReady(() => {
         keySignatures.forEach((keySignature) => {
@@ -71,6 +116,8 @@ function setupIndexPage() {
         document.getElementById("button" + idSuffix).onclick = () => showCards(loadedDeck);
     }
 }
+
+
 
 // Export this setup function so we can run it after we finish loading
 window.setupIndexPage = setupIndexPage;
