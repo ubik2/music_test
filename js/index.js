@@ -50,7 +50,8 @@ function setupMicFromPlayer() {
 
 function onFrequencyUpdate(noteInfo) {
     const currentNoteElement = document.getElementById('currentNote');
-    currentNoteElement.innerText = noteInfo.note + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents;
+    currentNoteElement.innerText = noteInfo.note + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
+    //console.log(noteInfo.frequency);
 }
 
 function setupMic() {
