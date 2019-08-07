@@ -7,8 +7,7 @@
     <script type="module" src="js/index.js"></script>
 </head>
 <body onload="setupIndexPage()">
-    <script>
-    </script>
+    <div id="currentNote"></div>
     <div id="main">
         Main Menu
         <table id="decks">
@@ -18,5 +17,6 @@
         </table>
     </div>
     <iframe id="cards" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden />
+    <audio id="player" controls></audio>
 </body>
 </html>

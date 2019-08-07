@@ -7,6 +7,8 @@ import Vex from "../node_modules/vexflow/src/index";
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
 //import Tone from "./Tone.js"; 
 
+// This doesn't work for flat signatures. This is mostly ok, since we don't currently cover them.
+// For a simple problematic case, F major should have a Bb.
 function generateDeck(keySignature, major = true) {
     const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
     const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
@@ -211,7 +213,7 @@ function setupCardPage(deck) {
         //deck.shuffleDeck();
         getCard();
     }
-
+    
     setup();
 }
 // Make our setupCardPage function accessible
