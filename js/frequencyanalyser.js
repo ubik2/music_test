@@ -10,8 +10,10 @@ export class FrequencyAnalyser {
         this.onFrequencyUpdateHandlers = [];
         this.frequencyError = null;
         this.active = false;
-        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-            .then((stream) => this.attachAnalyser(stream));
+        const userMediaPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        if (userMediaPromise !== null) {
+            userMediaPromise.then((stream) => this.attachAnalyser(stream));
+        }
     }
 
     attachAnalyser(stream) {
