@@ -5,7 +5,9 @@ import { FrequencyAnalyser } from "./frequencyanalyser";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
-    "D": ['D/4', 'E/4', 'F#/4', 'G/4', 'A/4', 'B/4', 'C#/5']
+    "D": ['D/4', 'E/4', 'F#/4', 'G/4', 'A/4', 'B/4', 'C#/5'],
+    "F": ['F/4', 'G/4', 'A/4', 'Bb/4', 'C/5', 'D/5', 'E/5'],
+    "Cb": ['Cb/4', 'Db/4', 'Eb/4', 'Fb/4', 'Gb/4', 'Ab/4', 'Bb/4']
 };
 const keySignatures = Object.keys(deckContents);
 function generateDeck(keySignature) {
@@ -24,6 +26,9 @@ function generateDeck(keySignature) {
 }
 
 function showCards(deck) {
+    frequencyAnalyser.stop();
+    frequencyAnalyser.keySignature = deck.deckId;
+    frequencyAnalyser.start();
     document.getElementById("main").hidden = true;
     document.getElementById("cards").hidden = false;
     window.frames["cards"].src = "card.html";
@@ -32,37 +37,23 @@ function showCards(deck) {
     };
 }
 
-/// Experiments
-
-function setupMicFromPlayer() {
-    const player = document.getElementById('player');
-
-    const handleSuccess = function(stream) {
-        if (window.URL) {
-            player.srcObject = stream;
-        } else {
-            player.src = stream;
-        }
-    };
-    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-        .then(handleSuccess);
-}
-
 function onFrequencyUpdate(noteInfo) {
     const currentNoteElement = document.getElementById('currentNote');
     if (!Number.isFinite(noteInfo.noteOffset)) {
         currentNoteElement.innerText = '';
     } else {
-        currentNoteElement.innerText = noteInfo.note + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
+        currentNoteElement.innerText = noteInfo.noteName + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
     }
     //console.log(noteInfo.frequency);
 }
 
+let frequencyAnalyser;
 function setupMic() {
-    const frequencyAnalyser = new FrequencyAnalyser(navigator);
+    frequencyAnalyser = new FrequencyAnalyser(navigator);
     frequencyAnalyser.onFrequencyUpdateHandlers.push(onFrequencyUpdate);
 }
 
+// TODO: hook something like this up if you really want web support, since people will inevitably decline mic permissions
 function checkForMicrophoneAccess() {
     // Just boilerplate for filling in later with proper code
     navigator.permissions.query({name:'microphone'}).then(function(result) {
@@ -107,7 +98,34 @@ function setupIndexPage() {
         });
     });
 
+    let lastRowCount = 0;
+    function addRowForDeck() {
+        const tableElement = document.getElementById('decks');
+        const tableRow = document.createElement('tr');
+        lastRowCount++;
+        const deckScaleElement = document.createElement('td');
+        deckScaleElement.setAttribute('id', 'deckScale' + lastRowCount);
+        tableRow.appendChild(deckScaleElement);
+        const newElement = document.createElement('td');
+        newElement.setAttribute('id', 'new' + lastRowCount);
+        tableRow.appendChild(newElement);
+        const learningElement = document.createElement('td');
+        learningElement.setAttribute('id', 'learning' + lastRowCount);
+        tableRow.appendChild(learningElement);
+        const reviewElement = document.createElement('td');
+        reviewElement.setAttribute('id', 'review' + lastRowCount);
+        tableRow.appendChild(reviewElement);
+        const buttonTableElement = document.createElement('td');
+        const buttonElement = document.createElement('button');
+        buttonElement.setAttribute('id', 'button' + lastRowCount);
+        buttonElement.innerText = "Study Now";
+        buttonTableElement.appendChild(buttonElement);
+        tableRow.appendChild(buttonTableElement);
+        tableElement.appendChild(tableRow);
+    }
+
     function onReady(loadedDeck) {
+        addRowForDeck();
         // A freshly loaded deck doesn't have valid counts yet. Reset them
         loadedDeck.resetNewCount();
         loadedDeck.resetLearnCount();

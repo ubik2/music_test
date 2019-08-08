@@ -1,8 +1,26 @@
 const Notes = [ 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B' ];
+const FlatVariants = [ {'B' : 'Cb'}, {'C#': 'Db'}, {'D#': 'Eb'}, {'E': 'Fb'}, {'F#': 'Gb'}, {'G#': 'Ab'}, {'A#': 'Bb'} ];
+const SharpVariants = [ {'C' : 'B#'}, {'F': 'E#'} ];
+const KeySignatureMappings = {
+    'Cb': Object.assign({}, ...FlatVariants.slice(0)),
+    'Gb': Object.assign({}, ...FlatVariants.slice(1)),
+    'Db': Object.assign({}, ...FlatVariants.slice(2)),
+    'Ab': Object.assign({}, ...FlatVariants.slice(3)),
+    'Eb': Object.assign({}, ...FlatVariants.slice(4)),
+    'Bb': Object.assign({}, ...FlatVariants.slice(5)),
+    'F' : Object.assign({}, ...FlatVariants.slice(6)),
+    'G' : Object.assign({}, ...SharpVariants.slice(1)),
+    'D' : Object.assign({}, ...SharpVariants.slice(1)),
+    'A' : Object.assign({}, ...SharpVariants.slice(1)),
+    'E' : Object.assign({}, ...SharpVariants.slice(1)),
+    'B' : Object.assign({}, ...SharpVariants.slice(1)),
+    'F#': Object.assign({}, ...SharpVariants.slice(1)),
+    'C#': Object.assign({}, ...SharpVariants.slice(0))
+};
 
 export class FrequencyAnalyser {
     
-    constructor(navigator) {
+    constructor(navigator, keySignature = 'C') {
         this.analyser = null;      // the AnalyserNode
         this.frequencies = null;   // array of amplitudes for various frequencies
         this.peakFrequency = null; // the frequency for which we have the highest amplitude
@@ -10,6 +28,8 @@ export class FrequencyAnalyser {
         this.onFrequencyUpdateHandlers = [];
         this.frequencyError = null;
         this.active = false;
+        this.keySignature = keySignature;
+        this.requestId = null;
         if (navigator.mediaDevices !== undefined) {
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
                 .then((stream) => this.attachAnalyser(stream));
@@ -37,14 +57,18 @@ export class FrequencyAnalyser {
             return;
         }
         this.active = true;
-        this.analysePitch();
+        this.analysePitch(this.keySignature);
     }
 
     stop() {
         this.active = false;
+        if (this.requestId !== null) {
+            window.cancelAnimationFrame(this.requestId);
+            this.requestId = null;
+        }
     }
     
-    analysePitch() {
+    analysePitch(keySignature) {
         if (!this.active) {
             return;
         }
@@ -60,9 +84,9 @@ export class FrequencyAnalyser {
         const factor = this.maxFrequency / this.frequencies.length;
         this.peakFrequency = (peakIndex >= 0) ? peakIndex * factor : 0;
         // TODO: Should I do something else when my peakValue is really low (no good mic reading)?
-        const frequencyInfo = this.frequencyToNote('C', this.peakFrequency);
+        const frequencyInfo = this.frequencyToNote(keySignature, this.peakFrequency);
         this.onFrequencyUpdateHandlers.forEach((callback) => callback(frequencyInfo));
-        window.requestAnimationFrame(() => this.analysePitch());
+        this.requestId = window.requestAnimationFrame(() => this.analysePitch(keySignature));
     }
 
     // TODO: use keySignature to show the right version of a note
@@ -73,11 +97,28 @@ export class FrequencyAnalyser {
         const A4Offset = C0C4Steps + C4A4Steps;
         const noteOffset = Math.round(12 * Math.log2(frequency / A4Frequency)) + A4Offset;
         const noteFrequency = A4Frequency * Math.pow(2, (noteOffset - A4Offset) / 12);
-        const noteName =  Notes[noteOffset % 12] + '/' + Math.floor(noteOffset / 12);
+        const rawNoteName = Notes[noteOffset % 12];
+        const rawOctave = Math.floor(noteOffset / 12);
         const approximateFrequency = Math.max(frequency - this.frequencyError, Math.min(frequency + this.frequencyError, noteFrequency));
         const cents = 1200 * Math.log2(approximateFrequency / noteFrequency);
+        let properNoteName = rawNoteName;
+        let properOctave = rawOctave;
+        if (KeySignatureMappings.hasOwnProperty(keySignature)) {
+            const mappings = KeySignatureMappings[keySignature];
+            if (mappings.hasOwnProperty(rawNoteName)) {
+                properNoteName = mappings[rawNoteName];
+                if (rawNoteName === 'B') {
+                    // We're turning a B into a Cb, make sure to bump the octave (e.g. B/3 => Cb/4)
+                    properOctave++;
+                } else if (rawNoteName === 'C') {
+                    // We're turning a C into a B#, make sure to drop the octave (e.g. C/4 => B#/3)
+                    properOctave--;
+                }
+            }
+        }
         return {
-            note: noteName,
+            fullNoteName: properNoteName + '/' + properOctave,
+            noteName: properNoteName,
             frequency: frequency,
             noteFrequency: noteFrequency,
             noteOffset: noteOffset,
