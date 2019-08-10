@@ -7,32 +7,11 @@ import Vex from "../node_modules/vexflow/src/index";
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
 //import Tone from "./Tone.js"; 
 
-// This doesn't work for flat signatures. This is mostly ok, since we don't currently cover them.
-// For a simple problematic case, F major should have a Bb.
-function generateDeck(keySignature, major = true) {
-    const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
-    const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
-    const baseOffset = 48;
-    const intervals = (major) ? majorIntervals : minorIntervals;
-    const keyOffset = Vex.Flow.keyProperties.note_values[keySignature.toUpperCase()].int_val;
-    const cards = [];
-    for (let i = 0; i < 7; i++) {
-        const note1Offset = baseOffset + keyOffset + intervals[i];
-        const note1 = Vex.Flow.integerToNote(note1Offset % 12) + '/' + Math.floor(note1Offset / 12);
-        for (let j = 0; j < 7; j++) {
-            if (j === i) {
-                continue;
-            }
-            const note2Offset = baseOffset + keyOffset + intervals[j];
-            const note2 = Vex.Flow.integerToNote(note2Offset % 12) + '/' + Math.floor(note2Offset / 12);
-            cards.push(new MusicCard(keySignature, note1, note2));
-        }
-    }
-    const deck = new Deck(keySignature, cards);
-    return deck;
-}
-
-
+/**
+ * Create a VexFlow Renderer object within the div element with id 'score' in the current document.
+ * 
+ * @return {Vex.Flow.Renderer} the renderer which can be used to render the score
+ */
 function initVexFlow() {
     const div = document.getElementById("score");
     const renderer = new Vex.Flow.Renderer(div, Vex.Flow.Renderer.Backends.SVG);
@@ -41,13 +20,22 @@ function initVexFlow() {
 }
 
 /**
+ * Callback for handling a click on a note
+ *
+ * @callback clickNoteCallback
+ * @param {Vex.Flow.StaveNote} note - the note that was clicked.
+ * @param {MouseEvent} event - the event args passed to the onclick handler
+ */
+
+/**
  * Renders the specified notes into a context using Vex.Flow
  * 
  * @param {Vex.Flow.Renderer} renderer renderer that will display the notes
  * @param {Array.<Vex.Flow.StaveNote>} notes array of notes to display
  * @param {string} keySignature key signature used for the stave
+ * @param {clickNoteCallback} clickCallback function that will be set as the note's onclick handler
  */
-function displayNotes(renderer, notes, keySignature) {
+function displayNotes(renderer, notes, keySignature, clickCallback = null) {
     const context = renderer.getContext();
     while (context.svg.childElementCount !== 0) {
         context.svg.removeChild(context.svg.children[0]);
@@ -67,8 +55,19 @@ function displayNotes(renderer, notes, keySignature) {
     voice.draw(context, stave);
 
     context.closeGroup();
+
+    if (clickCallback !== null) {
+        notes.forEach((note) => {
+            note.attrs.el.onclick = (e) => clickCallback(note, e);
+        });
+    }
 }
 
+/**
+ * Create a Tone.Synth object that sounds somewhat like a piano
+ * 
+ * @return {Tone.Synth} the synth object used to create sounds
+ */
 function getPianoSynth() {
     return new Tone.PolySynth(4, Tone.Synth, { volume: -2, oscillator: { partials: [1, 2, 5] }, portamento: .005 }).toMaster();
 }
@@ -98,47 +97,73 @@ function getToneDuration(note) {
  * Gets the string describing the tone note in the format used by Tone.js
  *
  * @param {Vex.Flow.StaveNote} note the note
- * @return {Array.<string>} the string describing the tone duration
+ * @return {Array.<string>} the strings describing the tone
  */
-function getToneNote(note) {
+function getToneNotes(note) {
     return note.keys.map(x => x.replace('/', ''));
 }
 
-/**
- * Plays a single note (which may be a chord)
- * 
- * @param {Vex.Flow.StaveNote} note - note to play
- */
-function playNote(note) {
-    const synth = getPianoSynth();
-    const toneNote = getToneNote(note);
-    const toneDuration = getToneDuration(note);
-    // Now, set up Tone to play the score
-    synth.triggerAttackRelease(toneNote, toneDuration);
+function onNoteStart(synth, time, note, displayOptions) {
+    if (displayOptions) {
+        note.setStyle({ fillStyle: "blue", strokeStyle: "blue" });
+        displayNotes(displayOptions.renderer, displayOptions.currentNotes, displayOptions.keySignature, displayOptions.clickCallback);
+    }
+    synth.triggerAttack(getToneNotes(note), time, 1); // velocity = 1
 }
 
-function playNotes(notes) {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
-    const synth = getPianoSynth();
-    const toneEntries = notes.map((note) => { return { time: 0, note: getToneNote(note), dur: '4n'} });
-    for (let i = 0; i < toneEntries.length; i++) {
-        toneEntries[i].time = i ? (4*i) + 'n' : 0;
+function onNoteEnd(synth, time, note, displayOptions) {
+    synth.triggerRelease(getToneNotes(note), time);
+    if (displayOptions) {
+        note.setStyle({ fillStyle: "black", strokeStyle: "black" });
+        displayNotes(displayOptions.renderer, displayOptions.currentNotes, displayOptions.keySignature, displayOptions.clickCallback);
     }
-    const part = new Tone.Part((time, event) => {
-        synth.triggerAttackRelease(event.note, event.dur, time);
-    }, toneEntries);
-    part.start(0);
-    part.loop = false;
+}
+
+/**
+ * Plays a sequence of notes (which may be a chord). This should not be invoked while we are already playing notes.
+ *
+ * @param {Array.<Vex.Flow.StaveNote>} notes - notes to play
+ * @param {Object} displayOptions - options used for updating the display
+ */
+function playNotes(notes, displayOptions) {
+    if (Tone.Transport.state !== "stopped") {
+        console.log("ignoring playNotes while playing");
+        return;
+    }
+    Tone.Transport.cancel();
+    let timeOffset = 0;
+    notes.forEach((note) => {
+        const start = timeOffset;
+        const end = start + synth.toSeconds(getToneDuration(note));
+        timeOffset = end;
+        Tone.Transport.schedule((time) => onNoteStart(synth, time, note, displayOptions), start);
+        Tone.Transport.schedule((time) => onNoteEnd(synth, time, note, displayOptions), end);
+    });
+    Tone.Transport.schedule((time) => Tone.Transport.stop(), timeOffset + 0.1);
     Tone.Transport.start();
 }
+
+const CardFacing = {
+    Front: 0,
+    Back: 1
+};
 
 let currentCard;
 let currentNotes;
 let currentDeck;
+let cardFacing = CardFacing.Front;
+let synth = getPianoSynth();
+let displayOptions = {
+    renderer: null,
+    currentNotes: [],
+    keySignature: "C",
+    clickCallback: null
+};
 function setupCardPage(deck) {
     const persistence = new Persistence();
-    const renderer = initVexFlow();
+    displayOptions.renderer = initVexFlow();
+    displayOptions.clickCallback = handleNoteClick;
+
     const frontButtons = [
         document.getElementById("playButton"),
         document.getElementById("showAnswerButton")
@@ -160,7 +185,7 @@ function setupCardPage(deck) {
             return;
         } else {
             frontCard(card);
-            playNote(currentNotes[0]);
+            playNotes([currentNotes[0]], displayOptions);
         }
     }
 
@@ -170,37 +195,43 @@ function setupCardPage(deck) {
         getCard();
     }
     function handleNoteClick(note) {
-        playNote(note);
+        if (cardFacing === CardFacing.Front && displayOptions.currentNotes.indexOf(note) === 0) {
+            playNotes([note], displayOptions);
+        } else if (cardFacing === CardFacing.Back && displayOptions.currentNotes.indexOf(note) >= 0) {
+            playNotes([note], displayOptions);
+        }
     }
     function frontCard(card) {
+        cardFacing = CardFacing.Front;
         frontButtons.forEach(el => el.hidden = false);
         backButtons.forEach(el => el.hidden = true);
         currentCard = card;
         currentNotes = [getStaveNote(currentCard.note1), getStaveNote(currentCard.note2)];
-        displayNotes(renderer, currentNotes, currentCard.keySignature);
-        currentNotes[0].attrs.el.onclick = function (e) { handleNoteClick(currentNotes[0]); };
+        displayOptions.currentNotes = currentNotes;
+        displayOptions.keySignature = currentCard.keySignature;
+        displayNotes(displayOptions.renderer, displayOptions.currentNotes, displayOptions.keySignature, displayOptions.clickCallback);
     }
     function backCard() {
+        cardFacing = CardFacing.Back;
         frontButtons.forEach(el => el.hidden = true);
         backButtons.forEach(el => el.hidden = false);
-        currentNotes[1].attrs.el.onclick = (e) => handleNoteClick(currentNotes[1]);
     }
     function message(str) {
         frontButtons.forEach(el => el.hidden = true);
         backButtons.forEach(el => el.hidden = true);
-        displayNotes(renderer, [], currentDeck.deckId);
+        displayNotes(displayOptions.renderer, [], displayOptions.keySignature);
         const el = document.getElementById("message");
         el.innerText = str;
         el.hidden = false;
     }
 
     function setup() {
-        document.getElementById("playButton").addEventListener("click", () => playNote(currentNotes[0]));
-        document.getElementById("replayButton").addEventListener("click", () => playNote(currentNotes[1]));
-        document.getElementById("replayAllButton").addEventListener("click", () => playNotes(currentNotes));
+        document.getElementById("playButton").addEventListener("click", () => playNotes([currentNotes[0]], displayOptions));
+        document.getElementById("replayButton").addEventListener("click", () => playNotes([currentNotes[1]], displayOptions));
+        document.getElementById("replayAllButton").addEventListener("click", () => playNotes(currentNotes, displayOptions));
         document.getElementById("showAnswerButton").addEventListener("click", () => {
             backCard();
-            playNote(currentNotes[1]);
+            playNotes([currentNotes[1]], displayOptions);
         });
         document.getElementById("againButton").addEventListener("click", () => nextCard(Ease.FAIL));
         document.getElementById("hardButton").addEventListener("click", () => nextCard(Ease.HARD));
