@@ -91,7 +91,7 @@ export class IndexPage {
                     if (success) {
                         if (loadedDeck === undefined) {
                             console.log("Generating new deck");
-                            const newDeck = this.generateDeck(keySignature);
+                            const newDeck = IndexPage.generateDeck(keySignature);
                             persistence.saveDeck(newDeck, (success, savedDeck) => {
                                 if (success) {
                                     this.onReady(savedDeck);
