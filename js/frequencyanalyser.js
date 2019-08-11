@@ -42,7 +42,10 @@ export class FrequencyAnalyser {
     }
 
     dispose() {
-        this.clock.dispose();
+        if (this.clock !== null) {
+            this.clock.dispose();
+            this.clock = null;
+        }
     }
 
     attachAnalyser(stream) {

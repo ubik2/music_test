@@ -17,6 +17,13 @@ export class IndexPage {
         this.lastRowCount = 0;
     }
 
+    dispose() {
+        if (this.frequencyAnalyser !== null) {
+            this.frequencyAnalyser.dispose();
+            this.frequencyAnalyser = null;
+        }
+    }
+
     static generateDeck(keySignature) {
         const keys = deckContents[keySignature];
         const cards = [];

@@ -1,8 +1,9 @@
 import { IndexPage } from "./indexpage";
 
+let indexPage = null;
 function setupIndexPage() {
-    const indexPage = new IndexPage();
+    indexPage = new IndexPage();
     indexPage.setupIndexPage();
 }
 
-window.setupIndexPage = setupIndexPage;
+window.onload = setupIndexPage;
