@@ -1,4 +1,6 @@
-const Notes = [ 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B' ];
+import { Clock } from "./clock";
+
+const Notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const FlatVariants = [ {'B' : 'Cb'}, {'C#': 'Db'}, {'D#': 'Eb'}, {'E': 'Fb'}, {'F#': 'Gb'}, {'G#': 'Ab'}, {'A#': 'Bb'} ];
 const SharpVariants = [ {'C' : 'B#'}, {'F': 'E#'} ];
 const KeySignatureMappings = {
@@ -34,6 +36,11 @@ export class FrequencyAnalyser {
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
                 .then((stream) => this.attachAnalyser(stream));
         }
+        this.clock = new Clock(100); // tick every 100 ms
+    }
+
+    dispose() {
+        this.clock.dispose();
     }
 
     attachAnalyser(stream) {
@@ -57,17 +64,14 @@ export class FrequencyAnalyser {
             return;
         }
         this.active = true;
-        this.analysePitch(this.keySignature);
+        this.clock.addListener((ticks, clock) => this.analysePitch(this.keySignature));
     }
 
     stop() {
         this.active = false;
-        if (this.requestId !== null) {
-            window.cancelAnimationFrame(this.requestId);
-            this.requestId = null;
-        }
+        this.clock.removeAllListeners();
     }
-    
+
     analysePitch(keySignature) {
         if (!this.active) {
             return;
@@ -86,10 +90,8 @@ export class FrequencyAnalyser {
         // TODO: Should I do something else when my peakValue is really low (no good mic reading)?
         const frequencyInfo = this.frequencyToNote(keySignature, this.peakFrequency);
         this.onFrequencyUpdateHandlers.forEach((callback) => callback(frequencyInfo));
-        this.requestId = window.requestAnimationFrame(() => this.analysePitch(keySignature));
     }
 
-    // TODO: use keySignature to show the right version of a note
     frequencyToNote(keySignature, frequency) {
         const A4Frequency = 440;
         const C0C4Steps = 48;
@@ -123,6 +125,6 @@ export class FrequencyAnalyser {
             noteFrequency: noteFrequency,
             noteOffset: noteOffset,
             cents: cents
-        }
+        };
     }
 }
