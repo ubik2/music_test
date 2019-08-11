@@ -47,7 +47,7 @@ export class IndexPage {
     onFrequencyUpdate(noteInfo) {
         const currentNoteElement = document.getElementById('currentNote');
         if (!Number.isFinite(noteInfo.noteOffset)) {
-            currentNoteElement.innerText = '';
+            currentNoteElement.innerText = ' ';
         } else {
             currentNoteElement.innerText = noteInfo.noteName + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
         }

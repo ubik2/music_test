@@ -29,12 +29,14 @@ export class FrequencyAnalyser {
         this.maxFrequency = null;  // the highest frequency we can sample (our highest entry will be below this).
         this.onFrequencyUpdateHandlers = [];
         this.frequencyError = null;
-        this.active = false;
+        this.active = false; // whether we've started (and not stopped)
+        this.streamAttached = false; // whether we've attached to the stream
         this.keySignature = keySignature;
         this.requestId = null;
         if (navigator.mediaDevices !== undefined) {
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then((stream) => this.attachAnalyser(stream));
+                .then((stream) => this.attachAnalyser(stream))
+                .catch((err) => console.warn("Unable to attach to media device. Microphone access is likely disabled. FrequencyAnalyser will not be enabled.", err));
         }
         this.clock = new Clock(100); // tick every 100 ms
     }
@@ -56,7 +58,10 @@ export class FrequencyAnalyser {
         const volume = audioContext.createGain();
         source.connect(volume);
         source.connect(this.analyser);
-        this.start();
+        this.streamAttached = true;
+        if (this.active && this.streamAttached) {
+            this.clock.addListener((ticks, clock) => this.analysePitch(this.keySignature));
+        }
     }
 
     start() {
@@ -64,7 +69,9 @@ export class FrequencyAnalyser {
             return;
         }
         this.active = true;
-        this.clock.addListener((ticks, clock) => this.analysePitch(this.keySignature));
+        if (this.active && this.streamAttached) {
+            this.clock.addListener((ticks, clock) => this.analysePitch(this.keySignature));
+        }
     }
 
     stop() {
