@@ -20,15 +20,27 @@ const KeySignatureMappings = {
     'C#': Object.assign({}, ...SharpVariants.slice(0))
 };
 
+export class NoteInfo {
+    constructor(properNoteName, properOctave, frequency, noteFrequency, noteOffset, cents) {
+        this.fullNoteName = properNoteName + '/' + properOctave;
+        this.noteName = properNoteName;
+        this.frequency = frequency;
+        this.noteFrequency = noteFrequency;
+        this.noteOffset = noteOffset;
+        this.cents = cents;
+    }
+}
+
 export class FrequencyAnalyser {
     
-    constructor(navigator, keySignature = 'C') {
+    constructor(navigator, keySignature = 'C', frequencyLimit = 1000) {
         this.analyser = null;      // the AnalyserNode
         this.frequencies = null;   // array of amplitudes for various frequencies
         this.peakFrequency = null; // the frequency for which we have the highest amplitude
         this.maxFrequency = null;  // the highest frequency we can sample (our highest entry will be below this).
+        this.frequencyLimit = frequencyLimit; // the highest frequency for which we will collect data
         this.onFrequencyUpdateHandlers = [];
-        this.frequencyError = null;
+        this.frequencyBucketSize = null;
         this.active = false; // whether we've started (and not stopped)
         this.streamAttached = false; // whether we've attached to the stream
         this.keySignature = keySignature;
@@ -38,7 +50,7 @@ export class FrequencyAnalyser {
                 .then((stream) => this.attachAnalyser(stream))
                 .catch((err) => console.warn("Unable to attach to media device. Microphone access is likely disabled. FrequencyAnalyser will not be enabled.", err));
         }
-        this.clock = new Clock(100); // tick every 100 ms
+        this.clock = new Clock(100); // tick every 100 ms- getFloatFrequencyData takes ~60ms
     }
 
     dispose() {
@@ -51,15 +63,20 @@ export class FrequencyAnalyser {
     attachAnalyser(stream) {
         const audioContext = new window.AudioContext();
         this.analyser = audioContext.createAnalyser();
+        // Clamp to these sound levels, and set the time smoothing
+        this.analyser.minDecibels = -90;
+        this.analyser.maxDecibels = -10;
+        this.analyser.smoothingTimeConstant = 0;
         this.analyser.fftSize = 32768; // Maximum possible
-        this.frequencies = new Float32Array(this.analyser.frequencyBinCount);
-        this.maxFrequency = audioContext.sampleRate / 2;
-        this.frequencyError = this.maxFrequency / this.analyser.frequencyBinCount;
+        this.maxFrequency = audioContext.sampleRate / 2; // sample rate is probably 44100, so this is probably 22050
+        this.frequencyBucketSize = this.maxFrequency / this.analyser.frequencyBinCount; // frequencyBinCount is fftSize/2, so this is probably ~1.4 Hz
+        const binCount = Math.ceil(this.frequencyLimit / this.maxFrequency * this.analyser.frequencyBinCount);
+        this.frequencies = new Float32Array(binCount);
         //console.log("maxFrequency: ", this.maxFrequency);
-        //console.log("frequencyError: ", this.frequencyError);
+        //console.log("frequencyBucketSize: ", this.frequencyBucketSize);
         const source = audioContext.createMediaStreamSource(stream);
-        const volume = audioContext.createGain();
-        source.connect(volume);
+        //const volume = audioContext.createGain();
+        //source.connect(volume);
         source.connect(this.analyser);
         this.streamAttached = true;
         if (this.active && this.streamAttached) {
@@ -95,8 +112,7 @@ export class FrequencyAnalyser {
                 peakIndex = i;
             }
         }
-        const factor = this.maxFrequency / this.frequencies.length;
-        this.peakFrequency = (peakIndex >= 0) ? peakIndex * factor : 0;
+        this.peakFrequency = (peakIndex >= 0) ? peakIndex * this.frequencyBucketSize : 0;
         // TODO: Should I do something else when my peakValue is really low (no good mic reading)?
         const frequencyInfo = this.frequencyToNote(keySignature, this.peakFrequency);
         this.onFrequencyUpdateHandlers.forEach((callback) => callback(frequencyInfo));
@@ -111,7 +127,7 @@ export class FrequencyAnalyser {
         const noteFrequency = A4Frequency * Math.pow(2, (noteOffset - A4Offset) / 12);
         const rawNoteName = Notes[noteOffset % 12];
         const rawOctave = Math.floor(noteOffset / 12);
-        const approximateFrequency = Math.max(frequency - this.frequencyError, Math.min(frequency + this.frequencyError, noteFrequency));
+        const approximateFrequency = Math.max(frequency - this.frequencyBucketSize, Math.min(frequency + this.frequencyBucketSize, noteFrequency));
         const cents = 1200 * Math.log2(approximateFrequency / noteFrequency);
         let properNoteName = rawNoteName;
         let properOctave = rawOctave;
@@ -128,13 +144,6 @@ export class FrequencyAnalyser {
                 }
             }
         }
-        return {
-            fullNoteName: properNoteName + '/' + properOctave,
-            noteName: properNoteName,
-            frequency: frequency,
-            noteFrequency: noteFrequency,
-            noteOffset: noteOffset,
-            cents: cents
-        };
+        return new NoteInfo(properNoteName, properOctave, frequency, noteFrequency, noteOffset, cents);
     }
 }

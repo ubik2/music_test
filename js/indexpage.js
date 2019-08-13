@@ -1,7 +1,7 @@
 ﻿import { MusicCard } from "./musiccard";
 import { Deck, Ease } from "./deck";
 import { Persistence } from "./persistence";
-import { FrequencyAnalyser } from "./frequencyanalyser";
+import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
@@ -15,6 +15,8 @@ export class IndexPage {
     constructor() {
         this.frequencyAnalyser = null;
         this.lastRowCount = 0;
+        this.canvas = null;
+        this.canvasContext = null;
     }
 
     dispose() {
@@ -58,11 +60,76 @@ export class IndexPage {
         } else {
             currentNoteElement.innerText = noteInfo.noteName + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
         }
+        if (this.canvasContext !== null && this.canvas.hidden === false) {
+            IndexPage.drawFrequencyData(this.canvasContext, this.frequencyAnalyser.frequencies, this.frequencyAnalyser.frequencyBucketSize, noteInfo);
+        }
     }
 
     setupMic() {
         this.frequencyAnalyser = new FrequencyAnalyser(navigator);
-        this.frequencyAnalyser.onFrequencyUpdateHandlers.push(this.onFrequencyUpdate);
+        this.frequencyAnalyser.onFrequencyUpdateHandlers.push((noteInfo) => this.onFrequencyUpdate(noteInfo));
+    }
+
+    static drawFrequencyData(canvasContext, frequencies, frequencyBucketSize, noteInfo) {
+        const width = 600;
+        const height = 200;
+        const bgStyle = 'rgb(0, 0, 0)';
+        const fgStyle = 'rgb(128, 128, 128)';
+        const peakStyle = 'rgb(255, 0, 0)';
+        const noteStyle = 'rgb(0, 255, 0)';
+        canvasContext.fillStyle = bgStyle;
+        canvasContext.fillRect(0, 0, width, height);
+
+        const bucketsPerPixel = Math.max(1, Math.floor(frequencies.length / width));
+        const pixelsPerBucket = Math.max(1, Math.floor(width / frequencies.length));
+        const barValues = new Array(Math.floor(width / pixelsPerBucket));
+        const frequencyBarIndex = Math.floor((noteInfo.frequency / frequencyBucketSize) / bucketsPerPixel);
+        const noteFrequencyBarIndex = Math.floor((noteInfo.noteFrequency / frequencyBucketSize) / bucketsPerPixel);
+        let min = undefined;
+        let max = undefined;
+        for (let i = 0; i < barValues.length; i++) {
+            const bucketIndexBase = bucketsPerPixel * i;
+            let barHeight = 0;
+            for (let bucketIndex = bucketIndexBase; bucketIndex < bucketIndexBase + bucketsPerPixel; bucketIndex++) {
+                if (Number.isFinite(frequencies[bucketIndex])) {
+                    barHeight += frequencies[bucketIndex];
+                }
+            }
+            if (barHeight !== 0) { // we had at least one valid value
+                barHeight = barHeight / bucketsPerPixel; // get the average value over the range
+                //if (min === undefined || barHeight < min) {
+                //    min = barHeight;
+                //}
+                //if (max === undefined || barHeight > max) {
+                //    max = barHeight;
+                //}
+                barValues[i] = barHeight;
+            } else {
+                barValues[i] = undefined;
+            }
+        }
+        //if (min === max) {
+        //    return;
+        //}
+        min = -140;
+        max = 0;
+        canvasContext.fillStyle = fgStyle;
+        barValues.forEach((value, index) => {
+            const x = index;
+            const normalizedValue = value === undefined ? 0 : (value - min) / (max - min);
+            const y = normalizedValue * height;
+            if (x === noteFrequencyBarIndex) {
+                canvasContext.fillStyle = noteStyle;
+                canvasContext.fillRect(x * pixelsPerBucket, height - y, pixelsPerBucket, y);
+                canvasContext.fillStyle = fgStyle;
+            } else if (x === frequencyBarIndex) {
+                canvasContext.fillStyle = peakStyle;
+                canvasContext.fillRect(x * pixelsPerBucket, height - y, pixelsPerBucket, y);
+                canvasContext.fillStyle = fgStyle;
+            } else {
+                canvasContext.fillRect(x * pixelsPerBucket, height - y, pixelsPerBucket, y);
+            }
+        });
     }
 
     // TODO: hook something like this up if you really want web support, since people will inevitably decline mic permissions
@@ -82,7 +149,17 @@ export class IndexPage {
         });
     }
 
+    toggleCanvas(event) {
+        if (this.canvas === null) {
+            return;
+        }
+        this.canvas.hidden = !this.canvas.hidden;
+    }
+
     setupIndexPage() {
+        this.canvas = document.getElementById("frequencyCanvas");
+        this.canvasContext = (this.canvas !== null) ? this.canvas.getContext('2d') : null;
+        document.getElementById('currentNote').onclick = (event) => this.toggleCanvas(event);
         this.setupMic();
         const persistence = new Persistence();
         persistence.whenReady(() => {
