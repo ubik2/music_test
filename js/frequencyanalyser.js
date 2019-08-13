@@ -33,12 +33,14 @@ export class NoteInfo {
 
 export class FrequencyAnalyser {
     
-    constructor(navigator, keySignature = 'C', frequencyLimit = 1000) {
+    constructor(navigator, keySignature = 'C', frequencyLimit = 6000, hpsLevels = 6) {
         this.analyser = null;      // the AnalyserNode
         this.frequencies = null;   // array of amplitudes for various frequencies
+        this.hpsFrequencies = null;
         this.peakFrequency = null; // the frequency for which we have the highest amplitude
         this.maxFrequency = null;  // the highest frequency we can sample (our highest entry will be below this).
         this.frequencyLimit = frequencyLimit; // the highest frequency for which we will collect data
+        this.hpsLevels = hpsLevels; // how many harmonic product spectrum terms to use
         this.onFrequencyUpdateHandlers = [];
         this.frequencyBucketSize = null;
         this.active = false; // whether we've started (and not stopped)
@@ -62,16 +64,16 @@ export class FrequencyAnalyser {
 
     attachAnalyser(stream) {
         const audioContext = new window.AudioContext();
-        this.analyser = audioContext.createAnalyser();
-        // Clamp to these sound levels, and set the time smoothing
-        this.analyser.minDecibels = -90;
-        this.analyser.maxDecibels = -10;
-        this.analyser.smoothingTimeConstant = 0;
-        this.analyser.fftSize = 32768; // Maximum possible
+        this.analyser = new window.AnalyserNode(audioContext, { fftSize: 32768, smoothingTimeConstant: 0 });
         this.maxFrequency = audioContext.sampleRate / 2; // sample rate is probably 44100, so this is probably 22050
         this.frequencyBucketSize = this.maxFrequency / this.analyser.frequencyBinCount; // frequencyBinCount is fftSize/2, so this is probably ~1.4 Hz
         const binCount = Math.ceil(this.frequencyLimit / this.maxFrequency * this.analyser.frequencyBinCount);
         this.frequencies = new Float32Array(binCount);
+        if (this.hpsLevels === 1) {
+            this.hpsFrequencies = this.frequencies;
+        } else {
+            this.hpsFrequencies = new Float32Array(binCount / this.hpsLevels);
+        }
         //console.log("maxFrequency: ", this.maxFrequency);
         //console.log("frequencyBucketSize: ", this.frequencyBucketSize);
         const source = audioContext.createMediaStreamSource(stream);
@@ -104,11 +106,19 @@ export class FrequencyAnalyser {
             return;
         }
         this.analyser.getFloatFrequencyData(this.frequencies);
+        if (this.hpsLevels !== 1) {
+            for (let i = 0; i < this.frequencies.length / this.hpsLevels; i++) {
+                this.hpsFrequencies[i] = 0;
+                for (let mult = 1; mult <= this.hpsLevels; mult++) {
+                    this.hpsFrequencies[i] = this.hpsFrequencies[i] + this.frequencies[mult * i];
+                }
+            }
+        }
         let peakIndex = -1;
         let peakValue = null;
-        for (let i = 0; i < this.frequencies.length; i++) {
-            if (peakValue === null || this.frequencies[i] > peakValue) {
-                peakValue = this.frequencies[i];
+        for (let i = 0; i < this.hpsFrequencies.length; i++) {
+            if (peakValue === null || this.hpsFrequencies[i] > peakValue) {
+                peakValue = this.hpsFrequencies[i];
                 peakIndex = i;
             }
         }

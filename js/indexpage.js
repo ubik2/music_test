@@ -61,7 +61,7 @@ export class IndexPage {
             currentNoteElement.innerText = noteInfo.noteName + '; ' + noteInfo.noteOffset + '; ' + noteInfo.cents.toFixed(2);
         }
         if (this.canvasContext !== null && this.canvas.hidden === false) {
-            IndexPage.drawFrequencyData(this.canvasContext, this.frequencyAnalyser.frequencies, this.frequencyAnalyser.frequencyBucketSize, noteInfo);
+            IndexPage.drawFrequencyData(this.canvasContext, this.frequencyAnalyser.hpsFrequencies, this.frequencyAnalyser.frequencyBucketSize, noteInfo);
         }
     }
 
@@ -85,8 +85,6 @@ export class IndexPage {
         const barValues = new Array(Math.floor(width / pixelsPerBucket));
         const frequencyBarIndex = Math.floor((noteInfo.frequency / frequencyBucketSize) / bucketsPerPixel);
         const noteFrequencyBarIndex = Math.floor((noteInfo.noteFrequency / frequencyBucketSize) / bucketsPerPixel);
-        let min = undefined;
-        let max = undefined;
         for (let i = 0; i < barValues.length; i++) {
             const bucketIndexBase = bucketsPerPixel * i;
             let barHeight = 0;
@@ -96,23 +94,14 @@ export class IndexPage {
                 }
             }
             if (barHeight !== 0) { // we had at least one valid value
-                barHeight = barHeight / bucketsPerPixel; // get the average value over the range
-                //if (min === undefined || barHeight < min) {
-                //    min = barHeight;
-                //}
-                //if (max === undefined || barHeight > max) {
-                //    max = barHeight;
-                //}
-                barValues[i] = barHeight;
+                barValues[i] = barHeight / bucketsPerPixel; // get the average value over the range
             } else {
                 barValues[i] = undefined;
             }
         }
-        //if (min === max) {
-        //    return;
-        //}
-        min = -140;
-        max = 0;
+        // default clamping for analysernode byte data is -100dB to -30dB, but we'll allow 20dB on either side of that (10x sound pressure)
+        const min = -120 * 6 - 240;
+        const max = -10 * 6 - 240;
         canvasContext.fillStyle = fgStyle;
         barValues.forEach((value, index) => {
             const x = index;
