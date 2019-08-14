@@ -94,7 +94,7 @@ export class CardPage {
      * @param {string} keySignature key signature used for the stave
      * @param {clickNoteCallback} [clickCallback] function that will be set as the note's onclick handler
      */
-    displayNotes() {
+    displayNotes(hideNotes = false) {
         const context = this.renderer.getContext();
         while (context.svg.childElementCount !== 0) {
             context.svg.removeChild(context.svg.children[0]);
@@ -108,7 +108,9 @@ export class CardPage {
         stave.setContext(context).draw();
 
         const voice = new Vex.Flow.Voice({ num_beats: this.currentNotes.length });
-        voice.addTickables(this.currentNotes);
+        if (!hideNotes) {
+            voice.addTickables(this.currentNotes);
+        }
 
         // important side effects
         new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
