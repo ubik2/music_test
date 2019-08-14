@@ -46,10 +46,25 @@ export class IndexPage {
         this.frequencyAnalyser.keySignature = deck.deckId;
         this.frequencyAnalyser.start();
         document.getElementById("main").hidden = true;
+        document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = false;
         window.frames["cards"].src = "card.html";
         window.frames["cards"].onload = () => {
             window.frames["cards"].contentWindow.cardPage.setupCardPage(deck);
+        };
+    }
+
+    showPractice(deck) {
+        this.frequencyAnalyser.stop();
+        this.frequencyAnalyser.keySignature = deck.deckId;
+        this.frequencyAnalyser.start();
+        document.getElementById("main").hidden = true;
+        document.getElementById("cards").hidden = true;
+        document.getElementById("practice").hidden = false;
+        window.frames["practice"].src = "practice.html";
+        window.frames["practice"].onload = () => {
+            window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck);
+            console.log('indexpage: loaded practice');
         };
     }
 
@@ -199,6 +214,12 @@ export class IndexPage {
         buttonElement.innerText = "Study Now";
         buttonTableElement.appendChild(buttonElement);
         tableRow.appendChild(buttonTableElement);
+        const practiceButtonTableElement = document.createElement('td');
+        const practiceButtonElement = document.createElement('button');
+        practiceButtonElement.setAttribute('id', 'practiceButton' + this.lastRowCount);
+        practiceButtonElement.innerText = "Practice Now";
+        practiceButtonTableElement.appendChild(practiceButtonElement);
+        tableRow.appendChild(practiceButtonTableElement);
         tableElement.appendChild(tableRow);
     }
 
@@ -214,6 +235,7 @@ export class IndexPage {
         document.getElementById("learning" + idSuffix).innerText = loadedDeck.learnCount;
         document.getElementById("review" + idSuffix).innerText = loadedDeck.reviewCount;
         document.getElementById("button" + idSuffix).onclick = () => this.showCards(loadedDeck);
+        document.getElementById("practiceButton" + idSuffix).onclick = () => this.showPractice(loadedDeck);
     }
 }
 
