@@ -49,7 +49,8 @@ export class FrequencyAnalyser {
     }
 
     attachAnalyser(stream) {
-        const audioContext = new window.AudioContext();
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
         this.analyser = audioContext.createAnalyser();
         this.analyser.fftSize = 32768; // Maximum possible
         this.frequencies = new Float32Array(this.analyser.frequencyBinCount);
