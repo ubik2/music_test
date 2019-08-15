@@ -69,17 +69,38 @@ export class PracticePage {
     }
 
     getCards() {
+        // get just the cards we've already learned
         let cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
 
-        // for now, lets limit to 4 notes
-        if (cards.length >= 2) {
-            cards.splice(2, cards.length);
+        // create map for transitions
+        var notesMap = Object();
+        for (var card of cards) {
+            this.addMapping(notesMap, card.note1, card.note2);
+            this.addMapping(notesMap, card.note2, card.note1);
         }
 
-        for (var card of cards) {
-            this.currentNotes.push(CardPage.getStaveNote(card.note1));
-            this.currentNotes.push(CardPage.getStaveNote(card.note2));
+        // pick a random starting note
+        let currentNote = this.chooseRandomKey(Array.from(Object.keys(notesMap)));
+        this.currentNotes = [];
+        while (this.currentNotes.length < 4) {
+            this.currentNotes.push(CardPage.getStaveNote(currentNote));
+
+            // choose next note
+            currentNote = this.chooseRandomKey(notesMap[currentNote]);
         }
         return cards;
+    }
+
+    addMapping(map, note1, note2) {
+        if (map[note1] == null) {
+            map[note1] = [note2];
+        }
+        else {
+            map[note1].push(note2);
+        }
+    }
+
+    chooseRandomKey(inArray) {
+        return inArray[Math.floor(Math.random() * Math.floor(inArray.length))];
     }
 }
