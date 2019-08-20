@@ -15,6 +15,7 @@ export class PracticePage {
         this.currentDeck = null;
         this.renderer = null;
         this.currentNotes = [];
+        this.synth = CardPage.createPianoSynth();
         this.keySignature = "C";
     }
 
@@ -50,9 +51,48 @@ export class PracticePage {
         context.closeGroup();
     }
 
+    onNoteStart(time, note) {
+/*        if (this.renderer !== null) {
+            note.setStyle({ fillStyle: "blue", strokeStyle: "blue" });
+            this.displayNotes();
+        }*/
+        this.synth.triggerAttack(CardPage.getToneNotes(note), time, 1); // velocity = 1
+    }
+
+    onNoteEnd(time, note) {
+        this.synth.triggerRelease(CardPage.getToneNotes(note), time);
+/*        if (this.renderer !== null) {
+            note.setStyle({ fillStyle: "black", strokeStyle: "black" });
+            this.displayNotes();
+        }*/
+    }
+
+   /**
+     * Plays a sequence of notes (which may be a chord). This should not be invoked while we are already playing notes.
+     *
+     * @param {Array.<Vex.Flow.StaveNote>} notes - notes to play
+     */
+    playNotes(notes) {
+        if (Tone.Transport.state !== "stopped") {
+            console.log("ignoring playNotes while playing");
+            return;
+        }
+        Tone.Transport.cancel();
+        let timeOffset = 0;
+        notes.forEach((note) => {
+            const start = timeOffset;
+            const end = start + this.synth.toSeconds(CardPage.getToneDuration(note));
+            timeOffset = end;
+            Tone.Transport.schedule((time) => this.onNoteStart(time, note), start);
+            Tone.Transport.schedule((time) => this.onNoteEnd(time, note), end);
+        });
+        Tone.Transport.schedule((time) => Tone.Transport.stop(), timeOffset + 0.1);
+        Tone.Transport.start();
+    }
+
     setup() {
         // TODO: set up any buttons, display elements on page
-        //document.getElementById("playButton").addEventListener("click", () => this.playNotes([this.currentNotes[0]]));
+        document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
 
         // get the cards from this deck that the user has already learned and use those to make up the practice session
         let cards = this.getCards();
