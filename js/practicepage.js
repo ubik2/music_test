@@ -111,7 +111,7 @@ export class PracticePage {
     getCards() {
         // get just the cards we've already learned
         let cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
-
+        this.keySignature = cards[0].keySignature;
         // create map for transitions
         var notesMap = Object();
         for (var card of cards) {
