@@ -17,6 +17,7 @@ export class PracticePage {
         this.currentNotes = [];
         this.synth = CardPage.createPianoSynth();
         this.keySignature = "C";
+        this.lastNote = null; // last note we used to start with
     }
 
     /**
@@ -93,6 +94,7 @@ export class PracticePage {
     setup() {
         // TODO: set up any buttons, display elements on page
         document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
+        document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
 
         // get the cards from this deck that the user has already learned and use those to make up the practice session
         let cards = this.getCards();
@@ -111,7 +113,12 @@ export class PracticePage {
     getCards() {
         // get just the cards we've already learned
         let cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
+        if (cards.length < 1) {
+            return null;
+        }
+        
         this.keySignature = cards[0].keySignature;
+
         // create map for transitions
         var notesMap = Object();
         for (var card of cards) {
@@ -119,8 +126,13 @@ export class PracticePage {
             this.addMapping(notesMap, card.note2, card.note1);
         }
 
-        // pick a random starting note
-        let currentNote = this.chooseRandomKey(Array.from(Object.keys(notesMap)));
+        var currentNote;
+        var notesArray = Array.from(Object.keys(notesMap));
+        do {
+            currentNote = this.chooseRandomKey(notesArray);
+        } while (currentNote == this.lastNote);
+        this.lastNote = currentNote;
+
         this.currentNotes = [];
         while (this.currentNotes.length < 4) {
             this.currentNotes.push(CardPage.getStaveNote(currentNote));
@@ -128,6 +140,12 @@ export class PracticePage {
             // choose next note
             currentNote = this.chooseRandomKey(notesMap[currentNote]);
         }
+        return cards;
+    }
+
+    nextCards() {
+        let cards = this.getCards();
+        this.displayNotes();
         return cards;
     }
 
