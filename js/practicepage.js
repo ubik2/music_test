@@ -1,156 +1,23 @@
-﻿import { CardPage } from "./cardpage";
-import { Card, Queue, CardType } from "./card";
-import { MusicCard } from "./musiccard";
-import { Deck, Ease } from "./deck";
-import { Persistence } from "./persistence";
-import { Logger, Random, DateUtil } from "./utils";
+﻿import { NotePage } from "./notepage";
+import { Card, CardType } from "./card";
+import { Deck } from "./deck";
 
-import Vex from "../node_modules/vexflow/src/index";
-// Tone isn't an ES6 module yet, so I need to pull it from card.html
-//import Tone from "./Tone.js"; 
-
-
-export class PracticePage {
+export class PracticePage extends NotePage {
     constructor() {
+        super();
         this.currentDeck = null;
-        this.renderer = null;
-        this.currentNotes = [];
-        this.synth = CardPage.createPianoSynth();
-        this.keySignature = "C";
-        this.lastNote = null; // last note we used to start with
+        this.lastNote = null;
     }
 
     /**
-     * Renders the specified notes into a context using Vex.Flow
-     * 
-     * @param {Array.<Vex.Flow.StaveNote>} notes array of notes to display
-     * @param {string} keySignature key signature used for the stave
-     * @param {clickNoteCallback} [clickCallback] function that will be set as the note's onclick handler
-     */
-    displayNotes(hideNotes = false) {
-        const context = this.renderer.getContext();
-        while (context.svg.childElementCount !== 0) {
-            context.svg.removeChild(context.svg.children[0]);
-        }
-
-        context.openGroup();
-
-        const stave = new Vex.Flow.Stave(10, 40, 200);
-        stave.addClef("treble");
-        stave.setKeySignature(this.keySignature);
-        stave.setContext(context).draw();
-
-        const voice = new Vex.Flow.Voice({ num_beats: this.currentNotes.length });
-        if (!hideNotes) {
-            voice.addTickables(this.currentNotes);
-        }
-
-        // important side effects
-        new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
-        voice.draw(context, stave);
-
-        context.closeGroup();
-    }
-
-    onNoteStart(time, note) {
-/*        if (this.renderer !== null) {
-            note.setStyle({ fillStyle: "blue", strokeStyle: "blue" });
-            this.displayNotes();
-        }*/
-        this.synth.triggerAttack(CardPage.getToneNotes(note), time, 1); // velocity = 1
-    }
-
-    onNoteEnd(time, note) {
-        this.synth.triggerRelease(CardPage.getToneNotes(note), time);
-/*        if (this.renderer !== null) {
-            note.setStyle({ fillStyle: "black", strokeStyle: "black" });
-            this.displayNotes();
-        }*/
-    }
-
-   /**
-     * Plays a sequence of notes (which may be a chord). This should not be invoked while we are already playing notes.
+     * Add a mapping from note1 to note2 to the specified map
      *
-     * @param {Array.<Vex.Flow.StaveNote>} notes - notes to play
+     * @param {Object} map - a dictionary mapping one note to an array of possible notes
+     * @param {string} note1 - the initial note
+     * @param {string} note2 - the note that we can transition to from note1
      */
-    playNotes(notes) {
-        if (Tone.Transport.state !== "stopped") {
-            console.log("ignoring playNotes while playing");
-            return;
-        }
-        Tone.Transport.cancel();
-        let timeOffset = 0;
-        notes.forEach((note) => {
-            const start = timeOffset;
-            const end = start + this.synth.toSeconds(CardPage.getToneDuration(note));
-            timeOffset = end;
-            Tone.Transport.schedule((time) => this.onNoteStart(time, note), start);
-            Tone.Transport.schedule((time) => this.onNoteEnd(time, note), end);
-        });
-        Tone.Transport.schedule((time) => Tone.Transport.stop(), timeOffset + 0.1);
-        Tone.Transport.start();
-    }
-
-    setup() {
-        // TODO: set up any buttons, display elements on page
-        document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
-        document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
-
-        // get the cards from this deck that the user has already learned and use those to make up the practice session
-        let cards = this.getCards();
-        this.displayNotes();
-        return cards;
-    }
-
-    setupPracticePage(deck) {
-        this.persistence = new Persistence();
-        this.renderer = CardPage.createRenderer();
-        this.currentDeck = deck;
-        this.setup();
-
-    }
-
-    getCards() {
-        // get just the cards we've already learned
-        let cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
-        if (cards.length < 1) {
-            return null;
-        }
-        
-        this.keySignature = cards[0].keySignature;
-
-        // create map for transitions
-        var notesMap = Object();
-        for (var card of cards) {
-            this.addMapping(notesMap, card.note1, card.note2);
-            this.addMapping(notesMap, card.note2, card.note1);
-        }
-
-        var currentNote;
-        var notesArray = Array.from(Object.keys(notesMap));
-        do {
-            currentNote = this.chooseRandomKey(notesArray);
-        } while (currentNote == this.lastNote);
-        this.lastNote = currentNote;
-
-        this.currentNotes = [];
-        while (this.currentNotes.length < 4) {
-            this.currentNotes.push(CardPage.getStaveNote(currentNote));
-
-            // choose next note
-            currentNote = this.chooseRandomKey(notesMap[currentNote]);
-        }
-        return cards;
-    }
-
-    nextCards() {
-        let cards = this.getCards();
-        this.displayNotes();
-        return cards;
-    }
-
-    addMapping(map, note1, note2) {
-        if (map[note1] == null) {
+    static addMapping(map, note1, note2) {
+        if (map[note1] === undefined) {
             map[note1] = [note2];
         }
         else {
@@ -158,7 +25,87 @@ export class PracticePage {
         }
     }
 
-    chooseRandomKey(inArray) {
+    /**
+     * Randomly select one of the values from the inArray parameter
+     *
+     * @param {Array.<string>} inArray - the array of values to choose from
+     * @return {string} the randomly selected value from the array
+     */
+    static chooseRandomKey(inArray) {
         return inArray[Math.floor(Math.random() * Math.floor(inArray.length))];
+    }
+
+    /**
+     * Set up various fields that are dependent on objects not available at the time of construction.
+     * This will generally be called after the page has loaded, so that the DOM objects are available.
+     */
+    setup() {
+        super.setup();
+        // TODO: set up any buttons, display elements on page
+        document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
+        document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
+
+        // get the cards from this deck that the user has already learned and use those to make up the practice session
+        this.getCards();
+        this.displayNotes();
+    }
+
+    /**
+     * Set up various fields that are dependent on objects not available at the time of construction.
+     * This will generally be called after the page has loaded, so that the DOM objects are available.
+     *
+     * @param {Deck} deck the deck that we will be interacting with on this page
+     */
+    setupPracticePage(deck) {
+        this.currentDeck = deck;
+        this.setup();
+    }
+
+    /**
+     * Build a set of notes based on the cards from the currentDeck that should be reviewed.
+     * This will also set the currentNotes field to a list of up to 4 notes selected from our cards in review.
+     * 
+     * @return {Array.<Card>} the list of cards that should be reviewed
+     */
+    getCards() {
+        // get just the cards we've already learned
+        const cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
+        if (cards.length < 1) {
+            return null;
+        }
+
+        this.keySignature = cards[0].keySignature;
+
+        // create map for transitions
+        const notesMap = Object();
+        for (var card of cards) {
+            PracticePage.addMapping(notesMap, card.note1, card.note2);
+            PracticePage.addMapping(notesMap, card.note2, card.note1);
+        }
+
+        // pick a random starting note (different from the last one)
+        let currentNote;
+        const notesArray = Array.from(Object.keys(notesMap));
+        do {
+            currentNote = PracticePage.chooseRandomKey(notesArray);
+        } while (currentNote == this.lastNote);
+        this.lastNote = currentNote;
+
+        this.currentNotes = [];
+        while (this.currentNotes.length < 4) {
+            this.currentNotes.push(NotePage.getStaveNote(currentNote));
+
+            // choose next note
+            currentNote = PracticePage.chooseRandomKey(notesMap[currentNote]);
+        }
+        return cards;
+    }
+
+    /**
+     * Update our page to display a new set of notes from another selection of cards
+     */
+    nextCards() {
+        this.getCards();
+        this.displayNotes();
     }
 }
