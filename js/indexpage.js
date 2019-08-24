@@ -41,6 +41,12 @@ export class IndexPage {
         return deck;
     }
 
+    showMenu() {
+        document.getElementById("main").hidden = false;
+        document.getElementById("practice").hidden = true;
+        document.getElementById("cards").hidden = true;
+    }
+
     showCards(deck) {
         this.frequencyAnalyser.stop();
         this.frequencyAnalyser.keySignature = deck.deckId;

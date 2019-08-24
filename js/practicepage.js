@@ -44,7 +44,8 @@ export class PracticePage extends NotePage {
         // TODO: set up any buttons, display elements on page
         document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
         document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
-
+        document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
+        
         // get the cards from this deck that the user has already learned and use those to make up the practice session
         this.getCards();
         this.displayNotes();
