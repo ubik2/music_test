@@ -41,6 +41,8 @@ export class CardPage extends NotePage {
         document.getElementById("goodButton").addEventListener("click", () => this.nextCard(Ease.GOOD));
         document.getElementById("easyButton").addEventListener("click", () => this.nextCard(Ease.EASY));
 
+        document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
+
         //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
         //const otherOptions = ["Cb", "F#", "C#"];
         //const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
