@@ -17,6 +17,7 @@ export class IndexPage {
         this.lastRowCount = 0;
         this.canvas = null;
         this.canvasContext = null;
+        this.decks = [];
     }
 
     dispose() {
@@ -42,6 +43,11 @@ export class IndexPage {
     }
 
     showMenu() {
+        // refresh the counts
+        for (const deck of this.decks) {
+            this.refreshRowForDeck(deck);
+        }
+
         document.getElementById("main").hidden = false;
         document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = true;
@@ -229,19 +235,27 @@ export class IndexPage {
         tableElement.appendChild(tableRow);
     }
 
+    refreshRowForDeck(inDeck) {
+        inDeck.resetNewCount();
+        inDeck.resetLearnCount();
+        inDeck.resetReviewCount();
+
+        const idSuffix = '' + (1 + keySignatures.indexOf(inDeck.deckId));
+        document.getElementById("deckScale" + idSuffix).innerText = inDeck.deckId + ' Major';
+        document.getElementById("new" + idSuffix).innerText = inDeck.newCount;
+        document.getElementById("learning" + idSuffix).innerText = inDeck.learnCount;
+        document.getElementById("review" + idSuffix).innerText = inDeck.reviewCount;
+        document.getElementById("button" + idSuffix).onclick = () => this.showCards(inDeck);
+        document.getElementById("practiceButton" + idSuffix).onclick = () => this.showPractice(inDeck);
+    }
+
     onReady(loadedDeck) {
         this.addRowForDeck();
+
         // A freshly loaded deck doesn't have valid counts yet. Reset them
-        loadedDeck.resetNewCount();
-        loadedDeck.resetLearnCount();
-        loadedDeck.resetReviewCount();
-        const idSuffix = '' + (1 + keySignatures.indexOf(loadedDeck.deckId));
-        document.getElementById("deckScale" + idSuffix).innerText = loadedDeck.deckId + ' Major';
-        document.getElementById("new" + idSuffix).innerText = loadedDeck.newCount;
-        document.getElementById("learning" + idSuffix).innerText = loadedDeck.learnCount;
-        document.getElementById("review" + idSuffix).innerText = loadedDeck.reviewCount;
-        document.getElementById("button" + idSuffix).onclick = () => this.showCards(loadedDeck);
-        document.getElementById("practiceButton" + idSuffix).onclick = () => this.showPractice(loadedDeck);
+        this.refreshRowForDeck(loadedDeck);
+
+        this.decks.push(loadedDeck);
     }
 }
 
