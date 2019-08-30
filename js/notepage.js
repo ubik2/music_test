@@ -1,5 +1,8 @@
 ﻿import Vex from "../node_modules/vexflow/src/index";
 import { Schedule, Clock } from "./clock";
+import { Player } from "./player";
+import { FormTypeChunk, ListTypeChunk } from './riffparser';
+import { SF2Parser } from './sf2parser';
 
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
 //import Tone from "./Tone.js"; 
@@ -15,12 +18,10 @@ export class NotePage {
         this.noteDefaultStyle = { fillStyle: "black", strokeStyle: "black" };
         this.clock = Clock.instance();
         this.schedule = new Schedule(this.clock);
+        this.parser = new SF2Parser();
+        this.player = new Player(this.parser, "../sf2/full_grand_piano.sf2", (chunk) => this.handleSoundFont(chunk));
     }
 
-    dispose() {
-        this.schedule.dispose();
-    }
-    
     /**
     * Create a VexFlow Renderer object within the div element with id 'score' in the current document.
     *
@@ -71,6 +72,10 @@ export class NotePage {
      */
     static getToneNotes(note) {
         return note.keys.map(x => x.replace('/', ''));
+    }
+
+    dispose() {
+        this.schedule.dispose();
     }
 
     /**
@@ -177,4 +182,18 @@ export class NotePage {
         this.clickCallback = (note) => this.playNotes([note]);
     }
 
+    handleSoundFont(chunk) {
+        if (chunk === null || !(chunk instanceof FormTypeChunk)) {
+            return;
+        }
+        const textDecoder = new TextDecoder();
+        for (let subchunk of chunk.chunks) {
+            if (subchunk instanceof ListTypeChunk) {
+                for (let listSubchunk of subchunk.chunks) {
+                    console.log(textDecoder.decode(listSubchunk.buffer));
+                    
+                }
+            }
+        }
+    }
 }
