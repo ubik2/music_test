@@ -1,4 +1,6 @@
 ﻿import Vex from "../node_modules/vexflow/src/index";
+import { Schedule, Clock } from "./clock";
+
 // Tone isn't an ES6 module yet, so I need to pull it from card.html
 //import Tone from "./Tone.js"; 
 
@@ -11,8 +13,14 @@ export class NotePage {
         this.clickCallback = null;
         this.notePlayingStyle = { fillStyle: "blue", strokeStyle: "blue" };
         this.noteDefaultStyle = { fillStyle: "black", strokeStyle: "black" };
+        this.clock = Clock.instance();
+        this.schedule = new Schedule(this.clock);
     }
 
+    dispose() {
+        this.schedule.dispose();
+    }
+    
     /**
     * Create a VexFlow Renderer object within the div element with id 'score' in the current document.
     *
@@ -120,7 +128,7 @@ export class NotePage {
             note.setStyle(this.notePlayingStyle);
             this.displayNotes();
         }
-        this.synth.triggerAttack(NotePage.getToneNotes(note), time, 1); // velocity = 1
+        this.synth.triggerAttack(NotePage.getToneNotes(note));
     }
 
     /**
@@ -130,7 +138,7 @@ export class NotePage {
      * @param {Vex.Flow.StaveNote} note - the note to end
      */
     onNoteEnd(time, note) {
-        this.synth.triggerRelease(NotePage.getToneNotes(note), time);
+        this.synth.triggerRelease(NotePage.getToneNotes(note));
         if (this.renderer !== null) {
             note.setStyle(this.noteDefaultStyle);
             this.displayNotes();
@@ -143,21 +151,21 @@ export class NotePage {
      * @param {Array.<Vex.Flow.StaveNote>} notes - notes to play
      */
     playNotes(notes) {
-        if (Tone.Transport.state !== "stopped") {
+        if (this.schedule.active) {
             console.log("ignoring playNotes while playing");
             return;
         }
-        Tone.Transport.cancel();
+        this.schedule.cancel();
         let timeOffset = 0;
         notes.forEach((note) => {
             const start = timeOffset;
             const end = start + this.synth.toSeconds(NotePage.getToneDuration(note));
             timeOffset = end;
-            Tone.Transport.schedule((time) => this.onNoteStart(time, note), start);
-            Tone.Transport.schedule((time) => this.onNoteEnd(time, note), end);
+            this.schedule.add(start, (time) => this.onNoteStart(time, note));
+            this.schedule.add(end, (time) => this.onNoteEnd(time, note));
         });
-        Tone.Transport.schedule((time) => Tone.Transport.stop(), timeOffset + 0.1);
-        Tone.Transport.start();
+        this.schedule.add(timeOffset + 0.1, (time) => this.schedule.stop());
+        this.schedule.start();
     }
 
     /**
@@ -168,4 +176,5 @@ export class NotePage {
         this.renderer = NotePage.createRenderer();
         this.clickCallback = (note) => this.playNotes([note]);
     }
+
 }

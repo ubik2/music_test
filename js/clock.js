@@ -4,6 +4,115 @@ const State = {
     Paused: 2
 };
 
+export class ScheduleEntry {
+    /**
+     * Callback for doing the scheduled work
+     *
+     * @callback scheduleCallback
+     * @param {Number} time - the time in seconds after the schedule is started that the callback is invoked.
+     */
+
+     /**
+     * Create a new ScheduleEntry instance which holds the time and a function
+     * 
+     * @param {Number} time - the time in seconds after the schedule is started when the entry should be run.
+     * @param {scheduleCallback} func - the callback function that will be invoked at the specified time.
+     */
+    constructor(time, func) {
+        this.time = time;
+        this.func = func;
+    }
+}
+
+export class Schedule {
+    /**
+     * Create a new Schedule instance which can be used to schedule events
+     * 
+     * @param {Clock} - clock instance which will be used to track time
+     */
+    constructor(clock) {
+        this.clock = clock;
+        this.entries = [];
+        this.startOffset = 0;
+        this.active = false;
+        this.run = this.run.bind(this);
+        if (this.clock != null) {
+            this.clock.addListener(this.run);
+        }
+    }
+
+    dispose() {
+        this.stop();
+        this.clock.removeListener(this.run);
+    }
+
+    /**
+     * Add a schedule entry at the specified time for the specified callback function.
+     * 
+     * @param {Number} time - the time in seconds after the schedule is started when the entry should be run.
+     * @param {scheduleCallback} func - the callback function that will be invoked at the specified time.
+     */
+    add(time, func) {
+        const entry = new ScheduleEntry(time, func);
+        for (let i = 0; i < this.entries.length; i++) {
+            if (time < this.entries[i].time) {
+                this.entries.splice(i, 0, entry);
+                return entry;
+            }            
+        }
+        this.entries.push(entry);
+        return entry;
+    }
+
+    /**
+     * Start the schedule
+     */
+    start() {
+        this.startOffset = this.clock.elapsed;
+        this.active = true;
+    }
+
+    /**
+     * Stop the schedule
+     */
+    stop() {
+        this.active = false;
+    }
+
+    /**
+     * Stops the schedule and clears all entries
+     */
+    cancel() {
+        this.entries = [];
+        this.startOffset = 0;
+        this.active = false;
+    }
+    
+    /**
+     * Run any schedule entries that are due
+     * 
+     * @param {Number} ticks - the number of ticks that have elapsed since the last invocation by the clock
+     * @param {Clock} clock - the clock instance
+     */
+    run(ticks, clock) {
+        if (!this.active) {
+            return;
+        }
+        let lastEntryIndex = -1;
+        const ticksFromStart = clock.elapsed - this.startOffset;
+        for (let i = 0; i < this.entries.length; i++) {
+            const entry = this.entries[i];
+            if (entry.time * 1000 <= ticksFromStart) {
+                entry.func(ticksFromStart / 1000);
+                lastEntryIndex = i;
+            }
+        }
+        if (lastEntryIndex >= 0) {
+            this.entries.splice(0, lastEntryIndex + 1);
+        }
+    }
+}
+
 let clockSingleton = null;
 export class Clock {
     /**
@@ -113,8 +222,9 @@ export class Clock {
      */
     static instance() {
         if (clockSingleton === null) {
-            clockSingleton = new Clock(10);
+            clockSingleton = new Clock();
+            clockSingleton.start();
         }
-        return Clock._instance;
+        return clockSingleton;
     }
-};
+}
