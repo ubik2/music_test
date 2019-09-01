@@ -14,7 +14,7 @@ export class NotePage {
         this.clock = Clock.instance();
         this.schedule = new Schedule(this.clock);
         this.parser = new SF2Parser();
-        this.player = new Player(this.parser, "../sf2/KawaiStereoGrand.sf2", (parser) => this.handleSoundFont(parser));
+        this.player = new Player(this.parser, "./sf2/KawaiStereoGrand.sf2", (parser) => this.handleSoundFont(parser));
         this.activeNotes = [];
     }
 
