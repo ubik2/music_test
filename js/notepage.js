@@ -1,13 +1,11 @@
 ﻿import Vex from "../node_modules/vexflow/src/index";
 import { Schedule, Clock } from "./clock";
-
-// Tone isn't an ES6 module yet, so I need to pull it from card.html
-//import Tone from "./Tone.js"; 
+import { Player } from "./player";
+import { SF2Parser } from './sf2parser';
 
 export class NotePage {
     constructor() {
         this.currentNotes = [];
-        this.synth = NotePage.createPianoSynth();
         this.renderer = null;
         this.keySignature = "C";
         this.clickCallback = null;
@@ -15,12 +13,11 @@ export class NotePage {
         this.noteDefaultStyle = { fillStyle: "black", strokeStyle: "black" };
         this.clock = Clock.instance();
         this.schedule = new Schedule(this.clock);
+        this.parser = new SF2Parser();
+        this.player = new Player(this.parser, "../sf2/KawaiStereoGrand.sf2", (parser) => this.handleSoundFont(parser));
+        this.activeNotes = [];
     }
 
-    dispose() {
-        this.schedule.dispose();
-    }
-    
     /**
     * Create a VexFlow Renderer object within the div element with id 'score' in the current document.
     *
@@ -34,15 +31,6 @@ export class NotePage {
     }
 
     /**
-     * Create a Tone.Synth object that sounds somewhat like a piano
-     * 
-     * @return {Tone.Synth} the synth object used to create sounds
-     */
-    static createPianoSynth() {
-        return new Tone.PolySynth(4, Tone.Synth, { volume: -2, oscillator: { partials: [1, 2, 5] }, portamento: .005 }).toMaster();
-    }
-
-    /**
      * Generate a quarter note for playing and displaying
      * 
      * @param {string} note - note in the Vex.Flow form (e.g. "C#/4")
@@ -53,24 +41,29 @@ export class NotePage {
     }
 
     /**
-     * Gets the string describing the tone duration in the format used by Tone.js
+     * Gets the note duration in seconds
      * 
-     * @param {Vex.Flow.StaveNote} note - the note
-     * @return {string} the string describing the tone duration
+     * @param {Vex.Flow.StaveNote} note - the note, which must be associated with a voice
+     * @return {Number} the note duration in seconds (based on a tempo of 120)
      */
-    static getToneDuration(note) {
+    static getDuration(note) {
+        let tempo = 120; // beats per minute - default to 120
+        // If we're on a stave that overrides the tempo, use that
+        if (note.stave != null && note.stave.modifiers != null) {
+            for (let modifier of note.stave.modifiers) {
+                if (modifier instanceof Vex.Flow.StaveTempo) {
+                    tempo = modifier.tempo.bpm;
+                }
+            }
+        }
+        const wholeNoteDuration = 60 * note.voice.time.beat_value / tempo; // a whole note would last this long in seconds
         const parsedNote = Vex.Flow.parseNoteData(note);
-        return Vex.Flow.durationToNumber(parsedNote.duration) + 'n';
+        const fraction = Vex.Flow.durationToNumber(parsedNote.duration); // this returns 4 for a quarter note
+        return wholeNoteDuration / fraction;
     }
 
-    /**
-     * Gets the string describing the tone note in the format used by Tone.js
-     *
-     * @param {Vex.Flow.StaveNote} note - the note
-     * @return {Array.<string>} the strings describing the tone
-     */
-    static getToneNotes(note) {
-        return note.keys.map(x => x.replace('/', ''));
+    dispose() {
+        this.schedule.dispose();
     }
 
     /**
@@ -96,6 +89,7 @@ export class NotePage {
 
         const stave = new Vex.Flow.Stave(10, 40, 200);
         stave.addClef("treble");
+
         stave.setKeySignature(this.keySignature);
         stave.setContext(context).draw();
 
@@ -128,7 +122,13 @@ export class NotePage {
             note.setStyle(this.notePlayingStyle);
             this.displayNotes();
         }
-        this.synth.triggerAttack(NotePage.getToneNotes(note));
+        note.keys.forEach((key, index, array) => {
+            const keyValue = Vex.Flow.keyProperties(key).int_value;
+            const noteId = this.player.triggerAttack(keyValue);
+            if (noteId != null) {
+                this.activeNotes.push([noteId, keyValue]);
+            }
+        });
     }
 
     /**
@@ -138,11 +138,24 @@ export class NotePage {
      * @param {Vex.Flow.StaveNote} note - the note to end
      */
     onNoteEnd(time, note) {
-        this.synth.triggerRelease(NotePage.getToneNotes(note));
+        note.keys.forEach((key, index, array) => {
+            const keyValue = Vex.Flow.keyProperties(key).int_value;
+            const matchingNoteEntries = this.activeNotes.filter((value, index, array) => value[1] == keyValue);
+            this.activeNotes = this.activeNotes.filter((value, index, array) => value[1] != keyValue);
+            matchingNoteEntries.forEach((value, index, array) => this.player.cleanup(value[0]));
+        });
         if (this.renderer !== null) {
             note.setStyle(this.noteDefaultStyle);
             this.displayNotes();
         }
+    }
+
+    onNotePreEnd(time, note) {
+        note.keys.forEach((key, index, array) => {
+            const keyValue = Vex.Flow.keyProperties(key).int_value;
+            const matchingNoteEntries = this.activeNotes.filter((value, index, array) => value[1] == keyValue);
+            matchingNoteEntries.forEach((value, index, array) => this.player.triggerRelease(value[0]));
+        });
     }
 
     /**
@@ -157,14 +170,17 @@ export class NotePage {
         }
         this.schedule.cancel();
         let timeOffset = 0;
+        const releaseTime = this.player.releaseTime;
+        const scheduleStopTime = 0.1;
         notes.forEach((note) => {
             const start = timeOffset;
-            const end = start + this.synth.toSeconds(NotePage.getToneDuration(note));
+            const end = start + NotePage.getDuration(note);
             timeOffset = end;
             this.schedule.add(start, (time) => this.onNoteStart(time, note));
+            this.schedule.add(end - releaseTime, (time) => this.onNotePreEnd(time, note));
             this.schedule.add(end, (time) => this.onNoteEnd(time, note));
         });
-        this.schedule.add(timeOffset + 0.1, (time) => this.schedule.stop());
+        this.schedule.add(timeOffset + scheduleStopTime, (time) => this.schedule.stop());
         this.schedule.start();
     }
 
@@ -177,4 +193,7 @@ export class NotePage {
         this.clickCallback = (note) => this.playNotes([note]);
     }
 
+    handleSoundFont(parser) {
+        console.log('SoundFont loaded');
+    }
 }
