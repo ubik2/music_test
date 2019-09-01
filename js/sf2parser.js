@@ -315,64 +315,6 @@ export class GeneratorEntry {
     constructor(buffer, offset) {
         this.genOperator = RiffParser.readWord(buffer, offset);
         this.genAmount = RiffParser.readWord(buffer, offset+2);
-        this.value = GeneratorEntry.computeValue(this.genOperator, this.genAmount);
-    }
-    
-    static computeValue(genOperator, genAmount) {
-        switch (genOperator) {
-            case 0:
-            case 1:
-            case 2:
-            case 3: 
-            case 52: 
-            case 54:
-            case 58: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                return int16;
-            }
-            case 4: 
-            case 12:
-            case 45:
-            case 50: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                return int16 * 32768;
-            }
-            case 17: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                return int16 / 10; // percentage of pan
-            }
-            case 22:
-            case 24: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                return Math.pow(2, int16 / 1200) * 8.176;
-            }
-            case 21:
-            case 23:
-            case 25:
-            case 26:
-            case 27:
-            case 28:
-            case 33:
-            case 34:
-            case 35:
-            case 36:
-            case 38: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                return Math.pow(2, int16 / 1200);
-            }
-            case 29: {
-                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
-                if (int16 > 1000) {
-                    int16 = 1000;
-                } else if (int16 < 0) {
-                    int16 = 0;
-                }
-                return 100 - int16 / 10; // percentage of full scale
-            }
-            case 53:
-            default:
-                return genAmount;
-        }
     }
 }
 
