@@ -1,7 +1,7 @@
 import { Chunk, RiffParser } from './riffparser';
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
+const textDecoder = new TextDecoder("ascii");
 
 export const SF2FourCharacterCodes = {
     'ifil': textEncoder.encode('ifil'),
@@ -38,10 +38,152 @@ export const ListTypeCodes = {
     'pdta': textEncoder.encode('pdta')
 };
 
+export const SampleLinkFlags = {
+    MonoSample: 1,
+    RightSample: 2,
+    LeftSample: 4,
+    LinkedSample: 8,
+    RomMonoSample: 0x8001,
+    RomRightSample: 0x8002,
+    RomLeftSample: 0x8004,
+    RomLinkedSample: 0x8008
+};
+ 
+export const GeneratorOperations = {
+    StartAddressOffset: 0,
+    EndAddressOffset: 1,
+    StartLoopAddressOffset: 2,
+    EndLoopAddressOffset: 3,
+    StartAddressCoarseOffset: 4,
+    ModulationLFOToPitch: 5,
+    VibratoLFOToPitch: 6,
+    ModulationEnvelopeToPitch: 7,
+    //
+    EndAddressCoarseOffset: 12,
+    //
+    Pan: 17,
+    //
+    DelayModulationEnvelope: 25,
+    AttackModulationEnvelope: 26,
+    HoldModulationEnvelope: 27,
+    DecayModulationEnvelope: 28,
+    SustainModulationEnvelope: 29,
+    ReleaseModulationEnvelope: 30,
+    //
+    DelayVolumeEnvelope: 33,
+    AttackVolumeEnvelope: 34,
+    HoldVolumeEnvelope: 35,
+    DecayVolumeEnvelope: 36,
+    SustainVolumeEnvelope: 37,
+    ReleaseVolumeEnvelope: 38,
+    //
+    StartLoopAddressCoarseOffset: 45,
+    KeyNumber: 46,
+    //
+    EndLoopAddressCoarseOffset: 50,
+    CoarseTune: 51,
+    FineTune: 52,
+    SampleID: 53,
+    SampleModes: 54,
+    Reserved3: 55,
+    ScaleTuning: 56,
+    ExclusiveClass: 57,
+    OverridingRootKey: 58,
+    Unused5: 59,
+    EndOperator: 60
+};
+
+export class GeneratorHelper {
+    static getProperty(generators, property) {
+        for (let generator of generators) {
+            if (generator.genOperator === property) {
+                return generator.genAmount;
+            }
+        }
+        return null;
+    }
+
+    static getInt16Property(generators, property) {
+        const genAmount = GeneratorHelper.getProperty(generators, property);
+        return (genAmount !== null && genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+    }
+
+    static getLogProperty(generators, property) {
+        const int16 = GeneratorHelper.getInt16Property(generators, property);
+        return (int16 !== null) ? Math.pow(2, int16 / 1200) : null;
+    }
+
+
+    static getSampleID(generators) {
+        return GeneratorHelper.getProperty(generators, GeneratorOperations.SampleID);
+    }
+
+    static getOverridingRootKey(generators) {
+        return GeneratorHelper.getInt16Property(generators, GeneratorOperations.OverridingRootKey);
+    }
+
+    static getFineTune(generators) {
+        return GeneratorHelper.getInt16Property(generators, GeneratorOperations.FineTune);
+    }
+
+    static getPan(generators) {
+        const int16 = GeneratorHelper.getInt16Property(generators, GeneratorOperations.Pan);
+        return (int16 !== null) ?  int16 / 10 : null;
+    }
+
+    static getCombinedOffset(coarseOffset, offset) {
+        if (coarseOffset === null && offset === null) {
+            return null;
+        } else if (offset === null) {
+            return coarseOffset * 32768;
+        } else if (coarseOffset === null) {
+            return offset;
+        } else {
+            return coarseOffset * 32768 + offset;
+        }
+    }
+
+    static getStartAddressOffset(generators) {
+        const offset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.StartAddressOffset);
+        const coarseOffset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.StartAddressCoarseOffset);
+        return GeneratorHelper.getCombinedOffset(coarseOffset, offset);
+    }
+
+    static getEndAddressOffset(generators) {
+        const offset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.EndAddressOffset);
+        const coarseOffset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.EndAddressCoarseOffset);
+        return GeneratorHelper.getCombinedOffset(coarseOffset, offset);
+    }
+
+    static getStartLoopAddressOffset(generators) {
+        const offset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.StartLoopAddressOffset);
+        const coarseOffset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.StartLoopAddressCoarseOffset);
+        return GeneratorHelper.getCombinedOffset(coarseOffset, offset);
+    }
+
+    static getEndLoopAddressOffset(generators) {
+        const offset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.EndLoopAddressOffset);
+        const coarseOffset = GeneratorHelper.getInt16Property(generators, GeneratorOperations.EndLoopAddressCoarseOffset);
+        return GeneratorHelper.getCombinedOffset(coarseOffset, offset);
+    }
+
+    static getSampleModes(generators) {
+        return GeneratorHelper.getProperty(generators, GeneratorOperations.SampleModes);
+    }
+
+    static getReleaseVolumeEnvelope(generators) {
+        return GeneratorHelper.getLogProperty(generators, GeneratorOperations.ReleaseVolumeEnvelope);
+    }
+
+    static getOverridingRootKey(generators) {
+        return GeneratorHelper.getInt16Property(generators, GeneratorOperations.OverridingRootKey);
+    }
+}
+
 export class StringChunk extends Chunk {
     constructor(fourCC, buffer, offset, length) {
         super(fourCC, buffer, offset, length);
-        this.text = textDecoder.decode(buffer.slice(offset, offset+length));
+        this.text = RiffParser.readString(buffer, offset, length);
     }
 }
 
@@ -56,15 +198,16 @@ export class VersionTagChunk extends Chunk {
     }
 }
 
-class PresetHeaderEntry {
+export class PresetHeaderEntry {
     constructor(buffer, offset) {
-        this.presetName = textDecoder.decode(buffer.slice(offset, offset+20));
+        this.presetName = RiffParser.readString(buffer, offset, 20);
         this.preset = RiffParser.readWord(buffer, offset+20);
         this.bank = RiffParser.readWord(buffer, offset+22);
         this.presetBagIndex = RiffParser.readWord(buffer, offset+24);
         this.library = RiffParser.readDWord(buffer, offset+26);
         this.genre = RiffParser.readDWord(buffer, offset+30);
         this.morphology = RiffParser.readDWord(buffer, offset+34);
+        this.presetBags = null;
     }
 }
 
@@ -81,31 +224,69 @@ export class PresetHeaderChunk extends Chunk {
             this.presetHeaders.push(entry);
         }
     }
-}
 
-class PresetBagEntry {
-    constructor(buffer, offset) {
-        this.genIndex = RiffParser.readWord(buffer, offset);
-        this.modIndex = RiffParser.readWord(buffer, offset+2);
+    setPresetBags(bagListChunk) {
+        for (let i = 0; i < this.presetHeaders.length; i++) {
+            let entry = this.presetHeaders[i];
+            let nextEntry = (i+1 < this.presetHeaders.length) ? this.presetHeaders[i+1] : null;
+            let endIndex = nextEntry !== null ? nextEntry.presetBagIndex : bagListChunk.bags.length;
+            entry.presetBags = [];
+            for (let j = entry.presetBagIndex; j < endIndex; j++) {
+                entry.presetBags.push(bagListChunk.bags[j]);
+            }
+        }
     }
 }
 
-export class PresetBagChunk extends Chunk {
+export class BagEntry {
+    constructor(buffer, offset) {
+        this.genIndex = RiffParser.readWord(buffer, offset);
+        this.modIndex = RiffParser.readWord(buffer, offset+2);
+        this.generators = null;
+        this.modulators = null;
+    }
+}
+
+export class BagListChunk extends Chunk {
     constructor(fourCC, buffer, offset, length) {
         super(fourCC, buffer, offset, length);
         const entrySize = 4;
         if (length % entrySize != 0) {
-            throw Error("Invalid PresetBagChunk");
+            throw Error("Invalid BagListChunk", fourCC);
         }
-        this.presetBags = [];
+        this.bags = [];
         for (let entryIndex = 0; entryIndex < length / entrySize; entryIndex++) {
-            let entry = new PresetBagEntry(buffer, offset + entryIndex * entrySize);
-            this.presetBags.push(entry);
+            let entry = new BagEntry(buffer, offset + entryIndex * entrySize);
+            this.bags.push(entry);
+        }
+    }
+
+    setGenerators(generatorListChunk) {
+        for (let i = 0; i < this.bags.length; i++) {
+            let entry = this.bags[i];
+            let nextEntry = (i+1 < this.bags.length) ? this.bags[i+1] : null;
+            let endIndex = nextEntry !== null ? nextEntry.genIndex : generatorListChunk.generators.length;
+            entry.generators = [];
+            for (let j = entry.genIndex; j < endIndex; j++) {
+                entry.generators.push(generatorListChunk.generators[j]);
+            }
+        }
+    }
+
+    setModulators(modulatorListChunk) {
+        for (let i = 0; i < this.bags.length; i++) {
+            let entry = this.bags[i];
+            let nextEntry = (i+1 < this.bags.length) ? this.bags[i+1] : null;
+            let endIndex = nextEntry !== null ? nextEntry.modIndex : modulatorListChunk.modulators.length;
+            entry.modulators = [];
+            for (let j = entry.modIndex; j < endIndex; j++) {
+                entry.modulators.push(modulatorListChunk.modulators[j]);
+            }
         }
     }
 }
 
-class ModulatorEntry {
+export class ModulatorEntry {
     constructor(buffer, offset) {
         this.modSrcOperator = RiffParser.readWord(buffer, offset);
         this.modDestOperator = RiffParser.readWord(buffer, offset+2);
@@ -120,7 +301,7 @@ export class ModulatorListChunk extends Chunk {
         super(fourCC, buffer, offset, length);
         const entrySize = 10;
         if (length % entrySize != 0) {
-            throw Error("Invalid ModListChunk");
+            throw Error("Invalid ModulatorListChunk", fourCC);
         }
         this.modulators = [];
         for (let entryIndex = 0; entryIndex < length / entrySize; entryIndex++) {
@@ -130,33 +311,91 @@ export class ModulatorListChunk extends Chunk {
     }
 }
 
-
-class PresetGenEntry {
+export class GeneratorEntry {
     constructor(buffer, offset) {
         this.genOperator = RiffParser.readWord(buffer, offset);
         this.genAmount = RiffParser.readWord(buffer, offset+2);
+        this.value = GeneratorEntry.computeValue(this.genOperator, this.genAmount);
+    }
+    
+    static computeValue(genOperator, genAmount) {
+        switch (genOperator) {
+            case 0:
+            case 1:
+            case 2:
+            case 3: 
+            case 52: 
+            case 54:
+            case 58: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                return int16;
+            }
+            case 4: 
+            case 12:
+            case 45:
+            case 50: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                return int16 * 32768;
+            }
+            case 17: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                return int16 / 10; // percentage of pan
+            }
+            case 22:
+            case 24: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                return Math.pow(2, int16 / 1200) * 8.176;
+            }
+            case 21:
+            case 23:
+            case 25:
+            case 26:
+            case 27:
+            case 28:
+            case 33:
+            case 34:
+            case 35:
+            case 36:
+            case 38: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                return Math.pow(2, int16 / 1200);
+            }
+            case 29: {
+                let int16 = (genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+                if (int16 > 1000) {
+                    int16 = 1000;
+                } else if (int16 < 0) {
+                    int16 = 0;
+                }
+                return 100 - int16 / 10; // percentage of full scale
+            }
+            case 53:
+            default:
+                return genAmount;
+        }
     }
 }
 
-export class PresetGenChunk extends Chunk {
+export class GeneratorListChunk extends Chunk {
     constructor(fourCC, buffer, offset, length) {
         super(fourCC, buffer, offset, length);
         const entrySize = 4;
         if (length % entrySize != 0) {
-            throw Error("Invalid PresetGenChunk");
+            throw Error("Invalid GeneratorListChunk", fourCC);
         }
-        this.presetGens = [];
+        this.generators = [];
         for (let entryIndex = 0; entryIndex < length / entrySize; entryIndex++) {
-            let entry = new PresetGenEntry(buffer, offset + entryIndex * entrySize);
-            this.presetGens.push(entry);
+            let entry = new GeneratorEntry(buffer, offset + entryIndex * entrySize);
+            this.generators.push(entry);
         }
     }
 }
 
-class InstrumentEntry {
+export class InstrumentEntry {
     constructor(buffer, offset) {
-        this.instrumentName = textDecoder.decode(buffer.slice(offset, offset+20));
+        this.instrumentName = RiffParser.readString(buffer, offset, 20);
         this.instrumentBagIndex = RiffParser.readWord(buffer, offset+20);
+        this.instrumentBags = null;
     }
 }
 
@@ -173,64 +412,33 @@ export class InstrumentChunk extends Chunk {
             this.instruments.push(entry);
         }
     }
+
+    setInstrumentBags(bagListChunk) {
+       for (let i = 0; i < this.instruments.length; i++) {
+            let entry = this.instruments[i];
+            let nextEntry = (i+1 < this.instruments.length) ? this.instruments[i+1] : null;
+            let endIndex = nextEntry !== null ? nextEntry.instrumentBagIndex : bagListChunk.bags.length;
+            entry.instrumentBags = [];
+            for (let j = entry.instrumentBagIndex; j < endIndex; j++) {
+                entry.instrumentBags.push(bagListChunk.bags[j]);
+            }
+        }
+    }
 }
 
-class InstrumentBagEntry {
+export class SampleEntry {
     constructor(buffer, offset) {
-        this.instrumentGenIndex = RiffParser.readWord(buffer, offset);
-        this.instrumentModIndex = RiffParser.readWord(buffer, offset+2);
-    }
-}
-
-export class InstrumentBagChunk extends Chunk {
-    constructor(fourCC, buffer, offset, length) {
-        super(fourCC, buffer, offset, length);
-        const entrySize = 4;
-        if (length % entrySize != 0) {
-            throw Error("Invalid InstrumentBagChunk");
-        }
-        this.instrumentBags = [];
-        for (let entryIndex = 0; entryIndex < length / entrySize; entryIndex++) {
-            let entry = new InstrumentBagEntry(buffer, offset + entryIndex * entrySize);
-            this.instrumentBags.push(entry);
-        }
-    }
-}
-
-class InstrumentGenEntry {
-    constructor(buffer, offset) {
-        this.genOperator = RiffParser.readWord(buffer, offset);
-        this.genAmount = RiffParser.readWord(buffer, offset+2);
-    }
-}
-
-export class InstrumentGenChunk extends Chunk {
-    constructor(fourCC, buffer, offset, length) {
-        super(fourCC, buffer, offset, length);
-        const entrySize = 4;
-        if (length % entrySize != 0) {
-            throw Error("Invalid InstrumentGenChunk");
-        }
-        this.instrumentGens = [];
-        for (let entryIndex = 0; entryIndex < length / entrySize; entryIndex++) {
-            let entry = new InstrumentGenEntry(buffer, offset + entryIndex * entrySize);
-            this.instrumentGens.push(entry);
-        }
-    }
-}
-
-class SampleEntry {
-    constructor(buffer, offset) {
-        this.sampleName = textDecoder.decode(buffer.slice(offset, offset+20));
+        this.sampleName = RiffParser.readString(buffer, offset, 20);
         this.start = RiffParser.readDWord(buffer, offset+20);
         this.end = RiffParser.readDWord(buffer, offset+24);
         this.startLoop = RiffParser.readDWord(buffer, offset+28);
         this.endLoop = RiffParser.readDWord(buffer, offset+32);
         this.sampleRate = RiffParser.readDWord(buffer, offset+36);
-        this.originalPitch = buffer[offset+40];
-        this.pitchCorrection = buffer[offset+41];
+        this.originalPitch = RiffParser.readByte(offset+40);
+        this.pitchCorrection = RiffParser.readByte(offset+41);
         this.sampleLink = RiffParser.readWord(buffer, offset+42);
         this.sampleType = RiffParser.readWord(buffer, offset+44);
+        this.sampleBuffer = null;
     }
 }
 
@@ -252,10 +460,40 @@ export class SampleChunk extends Chunk {
 export class SF2Parser extends RiffParser {
     constructor() {
         super();
+        this.buffers = [];
     }
 
     parse(buffer) {
         super.parse(buffer);
+        // Build our buffers based on the info from the shdr and smpl chunks
+        let pdtaChunk = this.chunk.getChunk('LIST', 'pdta');
+        let shdrChunk = pdtaChunk.getChunk('shdr');
+        let sdtaChunk = this.chunk.getChunk('LIST', 'sdta').getChunk('smpl');
+        // TODO: 24 bit audio currently unsupported
+        for (let sampleEntry of shdrChunk.samples) {
+            let int16Array = new Int16Array(sampleEntry.end - sampleEntry.start);
+            let startOffset = sdtaChunk.offset + 2 * sampleEntry.start;
+            for (let i = 0; i < int16Array.length; i++) {
+                int16Array[i] = RiffParser.readSWord(sdtaChunk.buffer, startOffset + 2 * i);
+            }
+            this.buffers.push(int16Array);
+            sampleEntry.sampleBuffer = int16Array;
+        }
+        // Hook up some indexed fields to point to their records
+        let phdrChunk = pdtaChunk.getChunk('phdr');
+        let pbagChunk = pdtaChunk.getChunk('pbag');
+        let pmodChunk = pdtaChunk.getChunk('pmod');
+        let pgenChunk = pdtaChunk.getChunk('pgen');
+        let instChunk = pdtaChunk.getChunk('inst');
+        let ibagChunk = pdtaChunk.getChunk('ibag');
+        let imodChunk = pdtaChunk.getChunk('imod');
+        let igenChunk = pdtaChunk.getChunk('igen');
+        pbagChunk.setModulators(pmodChunk);
+        pbagChunk.setGenerators(pgenChunk);
+        phdrChunk.setPresetBags(pbagChunk);
+        ibagChunk.setModulators(imodChunk);
+        ibagChunk.setGenerators(igenChunk);
+        instChunk.setInstrumentBags(ibagChunk);
     }
 
     createChunk(fourCC, buffer, offset, chunkSize) {
@@ -302,25 +540,25 @@ export class SF2Parser extends RiffParser {
             return new PresetHeaderChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.pbag)) {
-            return new PresetBagChunk(fourCC, buffer, offset, chunkSize);
+            return new BagListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.pmod)) {
             return new ModulatorListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.pgen)) {
-            return new PresetGenChunk(fourCC, buffer, offset, chunkSize);
+            return new GeneratorListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.inst)) {
             return new InstrumentChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.ibag)) {
-            return new InstrumentBagChunk(fourCC, buffer, offset, chunkSize);
+            return new BagListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.imod)) {
             return new ModulatorListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.igen)) {
-            return new InstrumentGenChunk(fourCC, buffer, offset, chunkSize);
+            return new GeneratorListChunk(fourCC, buffer, offset, chunkSize);
         }
         else if (RiffParser.arrayCompare(fourCC, SF2FourCharacterCodes.shdr)) {
             return new SampleChunk(fourCC, buffer, offset, chunkSize);

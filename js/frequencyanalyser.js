@@ -62,7 +62,7 @@ export class FrequencyAnalyser {
 
     attachAnalyser(stream) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioContext = new AudioContext();
+        const audioContext = new AudioContext({sampleRate: 44100});
         this.analyser = audioContext.createAnalyser();
         // Clamp to these sound levels, and set the time smoothing
         this.analyser.minDecibels = -90;

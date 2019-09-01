@@ -1,5 +1,5 @@
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
+const textDecoder = new TextDecoder("ascii");
 
 const FourCharacterCodes = {
     'RIFF': textEncoder.encode('RIFF'),
@@ -8,8 +8,7 @@ const FourCharacterCodes = {
 
 export class Chunk {
     constructor(fourCC, buffer, offset, length) {
-        this.fourCC = fourCC;
-        this.fourCCString = textDecoder.decode(fourCC);
+        this.fourCC = textDecoder.decode(fourCC);
         this.buffer = buffer;
         this.offset = offset;
         this.length = length;
@@ -41,21 +40,39 @@ export class ContainerChunk extends Chunk {
             }
         }
     }
+
+    getChunk(fourCC, typeString = null) {
+        for (let chunk of this.chunks) {
+            if (chunk.fourCC === fourCC) {
+                if (typeString === null) {
+                    return chunk;
+                }
+                if (chunk instanceof ListTypeChunk) {
+                    if (chunk.listType === typeString) {
+                        return chunk;
+                    }
+                } else if (chunk instanceof FormTypeChunk) {
+                    if (chunk.formType === typeString) {
+                        return chunk;
+                    }
+                }
+            }
+        }
+        return null;
+    }
 }
 
 export class FormTypeChunk extends ContainerChunk {
     constructor(fourCC, buffer, offset, length) {
         super(fourCC, buffer, offset, length);
-        this.formType = buffer.slice(offset, offset + 4);
-        this.formTypeString = textDecoder.decode(this.formType);
+        this.formType = textDecoder.decode(buffer.slice(offset, offset + 4));
     }
 }
 
 export class ListTypeChunk extends ContainerChunk {
     constructor(fourCC, buffer, offset, length) {
         super(fourCC, buffer, offset, length);
-        this.listType = buffer.slice(offset, offset + 4);
-        this.listTypeString = textDecoder.decode(this.listType);
+        this.listType = textDecoder.decode(buffer.slice(offset, offset + 4));
     }
 }
 
@@ -94,11 +111,31 @@ export class RiffParser {
     }
 
     static readDWord(buffer, offset) {
-        return (buffer[offset+3] << 24) + (buffer[offset+2] << 16) + (buffer[offset+1] << 8) + buffer[offset];
+        return ((buffer[offset+3] << 24) | (buffer[offset+2] << 16) | (buffer[offset+1] << 8) | buffer[offset]) >>> 0;
     }
 
     static readWord(buffer, offset) {
-        return (buffer[offset+1] << 8) + buffer[offset];
+        return ((buffer[offset+1] << 8) | buffer[offset]) >>> 0;
+    }
+
+    static readSWord(buffer, offset) {
+        let uint16 = RiffParser.readWord(buffer, offset);
+        return (uint16 > 0x7FFF) ? uint16 - 0x10000 : uint16;
+    }
+
+    static readByte(buffer, offset) {
+        return buffer[offset] >>> 0;
+    }
+
+    static readString(buffer, offset, maxLength) {
+        let endIndex = offset + maxLength;
+        for (let i = offset; i < offset + maxLength; i++) {
+            if (buffer[i] === 0) {
+                endIndex = i;
+                break;
+            }
+        }
+        return textDecoder.decode(buffer.slice(offset, endIndex));
     }
 
     static arrayCompare(array1, array2, array1Offset = 0, array1Length = undefined, array2Offset = 0, array2Length = undefined) {
