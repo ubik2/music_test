@@ -10,8 +10,9 @@ const TransactionType = {
 
 const PersistenceConstants = {
     DATABASE_NAME: "MusicTestDatabase",
-    DATABASE_VERSION: 1,
-    DECK_TABLE: "decks"
+    DATABASE_VERSION: 2,
+    DECK_TABLE: "decks",
+    CONFIG_TABLE: "config"
 };
 
 export class Persistence {
@@ -40,8 +41,18 @@ export class Persistence {
         };
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            const objectStore = db.createObjectStore(PersistenceConstants.DECK_TABLE, { keyPath: "deckId" });
-
+            try {
+                const objectStore = db.createObjectStore(PersistenceConstants.DECK_TABLE, { keyPath: "deckId" });
+            }
+            catch (error) {
+                console.log("error for deck table creation", error);
+            }
+            try {
+                const configObjectStore = db.createObjectStore(PersistenceConstants.CONFIG_TABLE, { autoIncrement: true });
+            }
+            catch (error) {
+                console.log("error for config table creation", error);
+            }
             //objectStore.transaction.oncomplete = (event) => {
             //    var deckObjectStore = db.transaction(PersistenceConstants.DECK_TABLE, TransactionType.READWRITE).objectStore(PersistenceConstants.DECK_TABLE);
             //    deckData.forEach((deck) => {
@@ -131,5 +142,47 @@ export class Persistence {
         rv.dayCutoff = deck.dayCutoffInternal();
         rv.today = deck.daysSinceCreation();
         return rv;
+    }
+
+    saveConfig(config, saveCallback = null) {
+        const transaction = this.db.transaction([PersistenceConstants.CONFIG_TABLE], TransactionType.READWRITE);
+        transaction.oncomplete = (event) => {
+            this.logger.log("saved config");
+        };
+
+        transaction.onerror = (event) => {
+            this.logger.error("Failed to save config: ", event);
+            throw "Failed to save config";
+        };
+
+        const objectStore = transaction.objectStore(PersistenceConstants.CONFIG_TABLE);
+        const request = objectStore.put(config);
+        request.onerror = (event) => {
+            if (saveCallback !== null) {
+                saveCallback(false, config);
+            }
+        };
+        request.onsuccess = (event) => {
+            if (saveCallback !== null) {
+                saveCallback(true, config);
+            }
+        };
+    }
+
+    loadConfig(loadCallback = null) {
+        const transaction = this.db.transaction([PersistenceConstants.CONFIG_TABLE]);
+        const objectStore = transaction.objectStore(PersistenceConstants.CONFIG_TABLE);
+        const request = objectStore.getAll();
+        request.onerror = (event) => {
+            if (loadCallback !== null) {
+                loadCallback(false, null);
+            }
+        };
+        request.onsuccess = (event) => {
+            this.logger.debug("Loaded config: ", request.result[request.result.length-1]);
+            if (loadCallback !== null) {
+                loadCallback(true, request.result[request.result.length-1]);
+            }
+        };
     }
 }

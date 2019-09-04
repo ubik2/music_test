@@ -1,5 +1,6 @@
 import { Card, Queue, CardType } from "./card";
 import { Logger, Random, DateUtil } from "./utils";
+import { Config } from "./config";
 
 export const Ease = {
     FAIL: 1,
@@ -48,34 +49,7 @@ export class Deck {
         this.today = this.daysSinceCreation();
         this.queueLimit = 50;
         this.reportLimit = 99999;
-        // For these config properties, I kept the anki names, to facilitate sharing JSON config
-        this.config = { // TODO: these should be loaded as user preferences
-            new: {
-                delays: [1, 10],
-                ints: [1, 4, 7],
-                initialFactor: 2500, // STARTING_FACTOR
-                perDay: 20,
-                bury: false
-                // separate, order
-            },
-            lapse: {
-                delays: [10],
-                mult: 0,
-                minInt: 1,
-                leechFails: 8,
-                leechAction: LeechAction.SUSPEND
-                // resched
-            },
-            review: {
-                perDay: 200,
-                ease4: 1.3,
-                fuzz: 0.05,
-                ivlFct: 1,
-                maxIvl: 36500,
-                bury: false,
-                hardFactor: 1.2
-            }
-        };
+        
         // anki stores id in these (or a tuple of due and id for the learnQueue), but i'm just storing cards
         // at some point, i may want to switch it back, since i'll serialize all this
         this.newQueue = [];
@@ -225,7 +199,7 @@ export class Deck {
     }
 
     deckNewLimit() {
-        return Math.max(0, this.config.new.perDay);
+        return Math.max(0, Config.instance().getConfig().new.perDay);
     }
 
     updateLearnCutoff(force) {
@@ -406,7 +380,7 @@ export class Deck {
     }
 
     currentReviewLimit() {
-        return this.config.review.perDay;
+        return Config.instance().getConfig().review.perDay;
     }
 
     resetReviewCount() {
@@ -634,15 +608,16 @@ export class Deck {
 
     // TODO: add support for cards having their own config to all these methods
     newConfig(card) {
-        return this.config.new;
+        console.log('newConfig', Config.instance().getConfig());
+        return Config.instance().getConfig().new;
     }
 
     lapseConfig(card) {
-        return this.config.lapse;
+        return Config.instance().getConfig().lapse;
     }
 
     reviewConfig(card) {
-        return this.config.review;
+        return Config.instance().getConfig().review;
     }
 
     learnConfig(card) {
@@ -767,7 +742,7 @@ export class Deck {
 
     nextReviewInterval(card, ease, fuzz) {
         const delay = this.daysLate(card);
-        const conf = this.config.review;
+        const conf = Config.instance().getConfig().review;
         const factor = card.factor / 1000.0;
         const hardFactor = conf.hardFactor || 1.2;
         const hardMin = (hardFactor > 1) ? card.interval : 0;
