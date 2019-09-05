@@ -2,6 +2,7 @@
 import { Deck, Ease } from "./deck";
 import { Persistence } from "./persistence";
 import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
+import { Config } from "./config";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
@@ -40,6 +41,11 @@ export class IndexPage {
         }
         const deck = new Deck(keySignature, cards);
         return deck;
+    }
+
+    static generateConfig() {
+        let config = new Config();
+        return config;
     }
 
     showMenu() {
@@ -179,6 +185,32 @@ export class IndexPage {
         this.setupMic();
         const persistence = new Persistence();
         persistence.whenReady(() => {
+            // load up config
+            persistence.loadConfig((success, config) => {
+                let configInstance = Config.instance();
+                if (success) {
+                    if (config === undefined || config.length == 0) {
+                        console.log("Generating new config");
+                        config = IndexPage.generateConfig();
+                        persistence.saveConfig(config, (success, savedConfig) => {
+                            if (success) {
+                                console.log('saved new config', savedConfig);
+                            } else {
+                                throw "Failed to save newly generated config";
+                            }
+                        });                        
+                    }
+                    else {
+                        console.log('loaded config: ', config)
+                    }
+                    configInstance.setConfig(config.configMap);
+                }
+                else {
+                    throw "failed to load config";
+                }
+            });
+
+            // load up all the decks
             keySignatures.forEach((keySignature) => {
                 persistence.loadDeck(keySignature, (success, loadedDeck) => {
                     if (success) {
@@ -236,10 +268,6 @@ export class IndexPage {
     }
 
     refreshRowForDeck(inDeck) {
-        inDeck.resetNewCount();
-        inDeck.resetLearnCount();
-        inDeck.resetReviewCount();
-
         const idSuffix = '' + (1 + keySignatures.indexOf(inDeck.deckId));
         document.getElementById("deckScale" + idSuffix).innerText = inDeck.deckId + ' Major';
         document.getElementById("new" + idSuffix).innerText = inDeck.newCount;
@@ -253,6 +281,9 @@ export class IndexPage {
         this.addRowForDeck();
 
         // A freshly loaded deck doesn't have valid counts yet. Reset them
+        loadedDeck.resetNewCount();
+        loadedDeck.resetLearnCount();
+        loadedDeck.resetReviewCount();
         this.refreshRowForDeck(loadedDeck);
 
         this.decks.push(loadedDeck);
