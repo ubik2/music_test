@@ -45,14 +45,14 @@ export class Player {
                     if (sampleID !== null) {
                         buffers.push({
                             fineTune: Player.firstNonNull(fineTune, global.fineTune),
-                            pan: Player.firstNonNull(pan, global.pan), 
+                            pan: Player.firstNonNull(pan ? pan / 100 : null, global.pan), 
                             releaseVolumeEnvelope: Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope),
                             buffer: Float32Array.from(samplesChunk.samples[sampleID].sampleBuffer, val => val / 32768)
                         });
                     } else if (bagEntry === instrument.instrumentBags[0]) {
                         // If the first record has no sample, it's a global set of properties
                         global.fineTune = fineTune;
-                        global.pan = pan;
+                        global.pan = pan ? pan / 100 : null;
                         global.releaseVolumeEnvelope = releaseVolumeEnvelope;
                     }
                 }
@@ -107,24 +107,25 @@ export class Player {
     playBuffers(buffers, pitchShift = 0) {
         const source = this.audioContext.createBufferSource();
         const audioBuffer = this.audioContext.createBuffer(buffers.length, buffers[0].buffer.length, this.audioContext.sampleRate);
-        const splitter = this.audioContext.createChannelSplitter(buffers.length);
-        source.connect(splitter);
+        const bufferSplitter = this.audioContext.createChannelSplitter(buffers.length);
+        source.connect(bufferSplitter);
         const gainNodesL = [];
         const gainNodesR = [];
         for (let i = 0; i < buffers.length; i++) {
-            const stereoSplitter = this.audioContext.createChannelSplitter(2);
+            const monoSplitter = this.audioContext.createChannelSplitter(2);
             const float32Array = buffers[i].buffer;
             const asdrGainNode = this.audioContext.createGain();
-            splitter.connect(asdrGainNode, i);
+            bufferSplitter.connect(asdrGainNode, i);
             asdrGainNode.gain.value = 1;
             asdrGainNode.gain.exponentialRampToValueAtTime(0.5, buffers[i].releaseVolumeEnvelope); // ramp down to half volume over half a second
-            asdrGainNode.connect(stereoSplitter);
+            asdrGainNode.connect(monoSplitter);
             const gainNodeL = this.audioContext.createGain();
             const gainNodeR = this.audioContext.createGain();
             gainNodeR.gain.value = .5 + (buffers[i].pan || 0);
             gainNodeL.gain.value = .5 - (buffers[i].pan || 0);
-            stereoSplitter.connect(gainNodeL, 0);
-            stereoSplitter.connect(gainNodeR, 1);
+            // Attach our mono sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
+            monoSplitter.connect(gainNodeL, 0);
+            monoSplitter.connect(gainNodeR, 0);
             if (audioBuffer.copyToChannel) {
                 audioBuffer.copyToChannel(float32Array, i);
             } else { // Workaround for Safari
@@ -141,6 +142,7 @@ export class Player {
             const detuneValue = (buffers[0].fineTune || 0) + 100 * pitchShift;
             source.playbackRate.value = Math.pow(2, detuneValue / 1200);
         }
+        // Each buffer has been split with a gain node for each channel. Bring together all the channels for each side.
         const mergerL = this.audioContext.createChannelMerger(gainNodesL.length);
         const mergerR = this.audioContext.createChannelMerger(gainNodesR.length);
         for (let i = 0; i < gainNodesL.length; i++) {
