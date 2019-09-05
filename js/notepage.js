@@ -1,7 +1,5 @@
 ﻿import Vex from "../node_modules/vexflow/src/index";
 import { Schedule, Clock } from "./clock";
-import { Player } from "./player";
-import { SF2Parser } from './sf2parser';
 
 export class NotePage {
     constructor() {
@@ -13,9 +11,8 @@ export class NotePage {
         this.noteDefaultStyle = { fillStyle: "black", strokeStyle: "black" };
         this.clock = Clock.instance();
         this.schedule = new Schedule(this.clock);
-        this.parser = new SF2Parser();
-        this.player = new Player(this.parser, "./sf2/KawaiStereoGrand.sf2", (parser) => this.handleSoundFont(parser));
         this.activeNotes = [];
+        this.player = null;
     }
 
     /**

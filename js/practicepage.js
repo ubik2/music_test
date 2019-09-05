@@ -56,9 +56,11 @@ export class PracticePage extends NotePage {
      * This will generally be called after the page has loaded, so that the DOM objects are available.
      *
      * @param {Deck} deck the deck that we will be interacting with on this page
+     * @param {Player} player the player that will be used to play sounds
      */
-    setupPracticePage(deck) {
+    setupPracticePage(deck, player) {
         this.currentDeck = deck;
+        this.player = player;
         this.setup();
     }
 

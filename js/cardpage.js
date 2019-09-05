@@ -55,9 +55,11 @@ export class CardPage extends NotePage {
     * This will generally be called after the page has loaded, so that the DOM objects are available.
     * 
     * @param {Deck} deck the deck that we will be interacting with on this page
+    * @param {Player} player the player that will be used to play sounds
     */
-    setupCardPage(deck) {
+    setupCardPage(deck, player) {
         this.persistence = new Persistence();
+        this.player = player;
         this.currentDeck = deck;
 
         this.frontButtons = [

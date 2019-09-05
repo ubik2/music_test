@@ -57,10 +57,10 @@ export class Player {
                     }
                 }
                 this.buffers = buffers;
+                this.activeSources = {};
                 if (callback !== null) {
                     callback(this);
                 }
-                this.activeSources = {};
             })
         });
     }

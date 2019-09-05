@@ -3,6 +3,8 @@ import { Deck, Ease } from "./deck";
 import { Persistence } from "./persistence";
 import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
 import { Config } from "./config";
+import { Player } from "./player";
+import { SF2Parser } from './sf2parser';
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
@@ -19,12 +21,18 @@ export class IndexPage {
         this.canvas = null;
         this.canvasContext = null;
         this.decks = [];
+        this.player = new Player(new SF2Parser(), "./sf2/KawaiStereoGrand.sf2", (player) => this.handleSoundFont(player));
+        this.soundFontLoaded = false;
     }
 
     dispose() {
         if (this.frequencyAnalyser !== null) {
             this.frequencyAnalyser.dispose();
             this.frequencyAnalyser = null;
+        }
+        if (this.player !== null) {
+            this.player.dispose();
+            this.player = null;
         }
     }
 
@@ -68,7 +76,7 @@ export class IndexPage {
         document.getElementById("cards").hidden = false;
         window.frames["cards"].src = "card.html";
         window.frames["cards"].onload = () => {
-            window.frames["cards"].contentWindow.cardPage.setupCardPage(deck);
+            window.frames["cards"].contentWindow.cardPage.setupCardPage(deck, this.player);
         };
     }
 
@@ -81,7 +89,7 @@ export class IndexPage {
         document.getElementById("practice").hidden = false;
         window.frames["practice"].src = "practice.html";
         window.frames["practice"].onload = () => {
-            window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck);
+            window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck, this.player);
             console.log('indexpage: loaded practice');
         };
     }
@@ -262,6 +270,7 @@ export class IndexPage {
         const practiceButtonElement = document.createElement('button');
         practiceButtonElement.setAttribute('id', 'practiceButton' + this.lastRowCount);
         practiceButtonElement.innerText = "Practice Now";
+        practiceButtonElement.enabled = false;
         practiceButtonTableElement.appendChild(practiceButtonElement);
         tableRow.appendChild(practiceButtonTableElement);
         tableElement.appendChild(tableRow);
@@ -273,8 +282,16 @@ export class IndexPage {
         document.getElementById("new" + idSuffix).innerText = inDeck.newCount;
         document.getElementById("learning" + idSuffix).innerText = inDeck.learnCount;
         document.getElementById("review" + idSuffix).innerText = inDeck.reviewCount;
-        document.getElementById("button" + idSuffix).onclick = () => this.showCards(inDeck);
-        document.getElementById("practiceButton" + idSuffix).onclick = () => this.showPractice(inDeck);
+        const buttonElement = document.getElementById("button" + idSuffix);
+        if (this.soundFontLoaded) {
+            buttonElement.enabled = true;
+            buttonElement.onclick = () => this.showCards(inDeck);
+        }
+        const practiceButtonElement = document.getElementById("practiceButton" + idSuffix);
+        if (this.soundFontLoaded) {
+            practiceButtonElement.enabled = true;
+            practiceButtonElement.onclick = () => this.showPractice(inDeck);
+        }
     }
 
     onReady(loadedDeck) {
@@ -287,6 +304,13 @@ export class IndexPage {
         this.refreshRowForDeck(loadedDeck);
 
         this.decks.push(loadedDeck);
+    }
+
+    handleSoundFont(player) {
+        this.soundFontLoaded = true;
+        for (let loadedDeck of this.decks) {
+            this.refreshRowForDeck(loadedDeck);
+        }
     }
 }
 
