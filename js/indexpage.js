@@ -268,10 +268,6 @@ export class IndexPage {
     }
 
     refreshRowForDeck(inDeck) {
-        inDeck.resetNewCount();
-        inDeck.resetLearnCount();
-        inDeck.resetReviewCount();
-
         const idSuffix = '' + (1 + keySignatures.indexOf(inDeck.deckId));
         document.getElementById("deckScale" + idSuffix).innerText = inDeck.deckId + ' Major';
         document.getElementById("new" + idSuffix).innerText = inDeck.newCount;
@@ -285,6 +281,9 @@ export class IndexPage {
         this.addRowForDeck();
 
         // A freshly loaded deck doesn't have valid counts yet. Reset them
+        loadedDeck.resetNewCount();
+        loadedDeck.resetLearnCount();
+        loadedDeck.resetReviewCount();
         this.refreshRowForDeck(loadedDeck);
 
         this.decks.push(loadedDeck);
