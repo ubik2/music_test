@@ -264,6 +264,7 @@ export class IndexPage {
         const buttonElement = document.createElement('button');
         buttonElement.setAttribute('id', 'button' + this.lastRowCount);
         buttonElement.innerText = "Study Now";
+        buttonElement.enabled = false;
         buttonTableElement.appendChild(buttonElement);
         tableRow.appendChild(buttonTableElement);
         const practiceButtonTableElement = document.createElement('td');
