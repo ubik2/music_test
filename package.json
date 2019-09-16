@@ -16,7 +16,7 @@
   },
   "scripts": {
     "start": "http-server -c-1 -p 8081 -e js",
-    "test": "jest"
+    "test": "./node_modules/jest/bin/jest.js"
   },
   "repository": {
     "type": "git",

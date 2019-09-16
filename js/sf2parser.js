@@ -137,6 +137,15 @@ export class ModulatorHelper {
         return null;
     }
 
+    static getMatchingModulators(modulators, modDestOperator) {
+        for (let modulator of modulators) {
+            if (modulator.modDestOperator === modDestOperator) {
+                return modulator;
+            }
+        }
+        return null;
+    }
+
     static getController(operator) {
         if (operator & 0x0080) {
             throw Error("MIDI Controller Palette support not yet implemented");
@@ -201,9 +210,9 @@ export class ModulatorHelper {
             case ModulatorSourceTypes.Linear:
                 return x => x / 127;
             case ModulatorSourceTypes.Concave:
-                return x => ModulatorHelper.sourceTypeTable.concave[int(x)];
+                return x => ModulatorHelper.sourceTypeTable.concave[Math.trunc(x)];
             case ModulatorSourceTypes.Convex:
-                return x => ModulatorHelper.sourceTypeTable.convex[int(x)];
+                return x => ModulatorHelper.sourceTypeTable.convex[Math.trunc(x)];
             case ModulatorSourceTypes.Switch:
                 return x => x >= 64 ? 1 : 0;
             default:
@@ -248,6 +257,28 @@ export class ModulatorHelper {
 
     static getLogFrequency(amount) {
         return (amount !== null) ? GeneratorHelper.BaseFrequency * ModulatorHelper.getLogProperty(amount) : null;
+    }
+
+    static getDefaultModulators() {
+        return [
+            // 8.4.1: Note-On Velocity to Initial Attenuation
+            new ModulatorEntry({
+                modSrcOperator: 0x0502,
+                modDestOperator: GeneratorOperations.InitialAttenuation,
+                modAmount: 960,
+                modAmountSrcOperator: 0,
+                modTransOperator: 0
+            }),
+            // 8.4.2: Note-On Velocity to Filter Cutoff
+            new ModulatorEntry({
+                modSrcOperator: 0x0102,
+                modDestOperator: GeneratorOperations.InitialFilterCutoff,
+                modAmount: -2400,
+                modAmountSrcOperator: 0,
+                modTransOperator: 0
+            })
+            // There are other defaults, but they all rely on MIDI input that I'm not providing
+        ];
     }
 };
 
@@ -465,12 +496,21 @@ export class BagListChunk extends Chunk {
 }
 
 export class ModulatorEntry {
-    constructor(buffer, offset) {
-        this.modSrcOperator = RiffParser.readWord(buffer, offset);
-        this.modDestOperator = RiffParser.readWord(buffer, offset+2);
-        this.modAmount = RiffParser.readWord(buffer, offset+4);
-        this.modAmountSrcOperator = RiffParser.readWord(buffer, offset+6);
-        this.modTransOperator = RiffParser.readWord(buffer, offset+8);
+    constructor(buffer, offset = 0) {
+        if (buffer instanceof Uint8Array) {
+            this.modSrcOperator = RiffParser.readWord(buffer, offset);
+            this.modDestOperator = RiffParser.readWord(buffer, offset+2);
+            this.modAmount = RiffParser.readWord(buffer, offset+4);
+            this.modAmountSrcOperator = RiffParser.readWord(buffer, offset+6);
+            this.modTransOperator = RiffParser.readWord(buffer, offset+8);
+        } else {
+            const properties = buffer;
+            this.modSrcOperator = properties.modSrcOperator;
+            this.modDestOperator = properties.modDestOperator
+            this.modAmount = properties.modAmount;
+            this.modAmountSrcOperator = properties.modAmountSrcOperator;
+            this.modTransOperator = properties.modTransOperator;
+        }
     }
 
     static getControllerParameter(controller, properties) {
@@ -499,6 +539,18 @@ export class ModulatorEntry {
         const controller = ModulatorHelper.getController(this.modAmountSrcOperator);
         return ModulatorEntry.getControllerParameter(controller, properties);
     }
+
+    isIdentical(other) {
+        return other !== null 
+            && this.modSrcOperator === other.modSrcOperator 
+            && this.modDestOperator === other.modDestOperator 
+            && this.modAmountSrcOperator === other.modAmountSrcOperator
+            && this.modTransOperator === other.modTransOperator;
+    }
+
+    clone() {
+        return new ModulatorEntry(this);
+    }
 }
 
 export class ModulatorListChunk extends Chunk {
@@ -520,6 +572,10 @@ export class GeneratorEntry {
     constructor(buffer, offset) {
         this.genOperator = RiffParser.readWord(buffer, offset);
         this.genAmount = RiffParser.readWord(buffer, offset+2);
+    }
+
+    isIdentical(other) {
+        return other !== null && this.genOperator === other.genOperator;
     }
 }
 
