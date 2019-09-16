@@ -1,4 +1,4 @@
-import { GeneratorHelper } from "./sf2parser";
+import { GeneratorHelper, GeneratorOperations, ModulatorHelper } from "./sf2parser";
 
 export class Player {
     constructor(parser, url, callback = null) {
@@ -47,13 +47,16 @@ export class Player {
                             fineTune: Player.firstNonNull(fineTune, global.fineTune),
                             pan: Player.firstNonNull(pan ? pan / 100 : null, global.pan), 
                             releaseVolumeEnvelope: Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope),
-                            buffer: Float32Array.from(samplesChunk.samples[sampleID].sampleBuffer, val => val / 32768)
+                            buffer: Float32Array.from(samplesChunk.samples[sampleID].sampleBuffer, val => val / 32768),
+                            // For now, I'm dropping the SF2 modulators in directly. These should really be a backend agnostic class.
+                            modulators: bagEntry.modulators
                         });
                     } else if (bagEntry === instrument.instrumentBags[0]) {
                         // If the first record has no sample, it's a global set of properties
                         global.fineTune = fineTune;
                         global.pan = pan ? pan / 100 : null;
                         global.releaseVolumeEnvelope = releaseVolumeEnvelope;
+                        global.modulators = bagEntry.modulators;
                     }
                 }
                 this.buffers = buffers;
@@ -78,7 +81,7 @@ export class Player {
         if (this.activeSources == null) {
             return null;
         }
-        const trackingObject = this.playBuffers(this.buffers, keyNumber - this.baseKey);
+        const trackingObject = this.playBuffers(this.buffers, { velocity: 100, keyNumber: keyNumber } );
         this.activeSources[trackingObject.noteId] = trackingObject;
         return trackingObject.noteId;
     }
@@ -104,7 +107,8 @@ export class Player {
         }
     }
 
-    playBuffers(buffers, pitchShift = 0) {
+    playBuffers(buffers, options = null) {
+        const pitchShift = (options != null && options.hasOwnProperty('keyNumber')) ? options.keyNumber - this.baseKey : 0;
         const source = this.audioContext.createBufferSource();
         const audioBuffer = this.audioContext.createBuffer(buffers.length, buffers[0].buffer.length, this.audioContext.sampleRate);
         const bufferSplitter = this.audioContext.createChannelSplitter(buffers.length);
@@ -112,6 +116,18 @@ export class Player {
         const gainNodesL = [];
         const gainNodesR = [];
         for (let i = 0; i < buffers.length; i++) {
+            // for (let modulator of buffers[i].modulators) {
+            //     if (modulator.modDestOperator != GeneratorOperations.InitialFilterCutoff) {
+            //         console.log("Skipping unknown filter operator: ", modulator.modDestOperator);
+            //         continue;
+            //     }
+            //     const sourceFunction = ModulatorHelper.getModulatorFunction(modulator);
+            //     const filter = this.audioContext.createBiquadFilter();
+            //     filter.type = "lowpass";
+            //     filter.detune.value = filter.detune.value + sourceFunction(modulator.getSourceParameter(options), modulator.getAmountSourceParameter(options));
+            //     filter.frequency.value = GeneratorHelper.BaseFrequency;
+            //     bufferSplitter.connect(filter, i);
+            // }
             const monoSplitter = this.audioContext.createChannelSplitter(2);
             const float32Array = buffers[i].buffer;
             const asdrGainNode = this.audioContext.createGain();

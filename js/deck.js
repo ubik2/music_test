@@ -40,7 +40,7 @@ export class Deck {
         this.learnToday = 0;
         this.creation = this.intNow(); // seconds since epoch when deck was created
         this.globalConfig = { // TODO: this belongs higher level than the deck
-            rollover: 4,
+            rollover: 4, // rollover at 4 am
             collapseTime: 1200, // 20 minutes
             newSpread: NewSpread.NEW_CARDS_DISTRIBUTE,
             dayLearnFirst: false
@@ -294,6 +294,9 @@ export class Deck {
         // TODO: Unbury
     }
 
+    /**
+     * @returns {Number} the number of seconds since epoch when today's cutoff will occur
+     */
     dayCutoffInternal() {
         let rolloverTime = this.globalConfig.rollover || 4;
         if (rolloverTime < 0) {
@@ -608,7 +611,6 @@ export class Deck {
 
     // TODO: add support for cards having their own config to all these methods
     newConfig(card) {
-        console.log('newConfig', Config.instance().getConfig());
         return Config.instance().getConfig().new;
     }
 
@@ -629,7 +631,7 @@ export class Deck {
     }
 
     rescheduleAsReview(card, conf, early) {
-        const lapse = (card.type === CardType.REVEW || card.type === CardType.RELEARN);
+        const lapse = (card.type === CardType.REVIEW || card.type === CardType.RELEARN);
         if (lapse) {
             this.rescheduleGraduatingLapse(card);
         } else {
@@ -643,6 +645,14 @@ export class Deck {
         card.cardType = CardType.REVIEW;
     }
 
+    /**
+     * Determine how many of the delay values still would be considered part of this day
+     * 
+     * @param {Array.<Number>} delays - array of delay intervals in minutes
+     * @param {Number} left - only left elements will be considered, excluding earlier elements if needed
+     * @param {Number} [now=0] - if non-zero, this will override the current number of seconds since epoch
+     * @returns the number of delay values from the delays array that would still be before our daily cutoff
+     */
     leftToday(delays, left, now = 0) {
         if (now === 0) {
             now = this.intNow();
@@ -886,6 +896,9 @@ export class Deck {
         this.learnQueue.splice(i, 0, card);
     }
 
+    /**
+     * @returns {Number} the number of seconds elapsed since epoch
+     */
     intNow() {
         return Math.floor(this.dateUtil.now() / 1000);
     }

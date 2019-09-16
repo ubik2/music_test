@@ -58,6 +58,7 @@ export const GeneratorOperations = {
     ModulationLFOToPitch: 5,
     VibratoLFOToPitch: 6,
     ModulationEnvelopeToPitch: 7,
+    InitialFilterCutoff: 8,
     //
     EndAddressCoarseOffset: 12,
     //
@@ -93,7 +94,185 @@ export const GeneratorOperations = {
     EndOperator: 60
 };
 
+export const ModulatorControllers = {
+    NoController: 0,
+    NoteOnVelocity: 2,
+    NoteOnKeyNumber: 3,
+    PolyPressure: 10,
+    ChannelPressure: 13,
+    PitchWheel: 14,
+    PitchWheelSensitivity: 16,
+    Link: 127
+};
+
+export const ModulatorDirections = {
+    MinToMax: 0,
+    MaxToMin: 1
+};
+
+export const ModulatorPolarities = {
+    Unipolar: 0,
+    Bipolar: 1
+};
+
+export const ModulatorSourceTypes = {
+    Linear: 0,
+    Concave: 1,
+    Convex: 2,
+    Switch: 3
+};
+
+export const ModulatorTransforms = {
+    Linear: 0,
+    AbsoluteValue: 2
+};
+
+export class ModulatorHelper {
+    static getModulatorEntry(modulators, modDestOperator) {
+        for (let modulator of modulators) {
+            if (modulator.modDestOperator === modDestOperator) {
+                return modulator;
+            }
+        }
+        return null;
+    }
+
+    static getController(operator) {
+        if (operator & 0x0080) {
+            throw Error("MIDI Controller Palette support not yet implemented");
+        }
+        return operator & 0x007F;
+    }
+
+    static getSourceType(operator) {
+        if (operator & 0xF000) {
+            throw Error("Invalid modulator soure type");
+        }
+        return operator >> 10;
+    }
+
+    static getPolarity(operator) {
+        return (operator & 0x0200) ? ModulatorPolarities.Bipolar : ModulatorPolarities.Unipolar;
+    }
+    
+    /**
+     * Returns a function that maps from [0,1] to [-1,1]
+     * @param {*} operator 
+     */
+    static getPolarityFunction(operator) {
+        const polarity = ModulatorHelper.getPolarity(operator);
+        switch (polarity) {
+            case ModulatorPolarities.Unipolar: 
+                return x => x;
+            case ModulatorPolarities.Bipolar: 
+                return x => 2 * x - 1;
+            default:
+                return undefined;
+        }
+    }
+
+    static getDirection(operator) {
+        return (operator & 0x0100) ? ModulatorDirections.MaxToMin : ModulatorDirections.MinToMax;
+    }
+
+    /**
+     * Returns a function that maps from [0,1] to [0,1]
+     * @param {*} operator 
+     */
+    static getDirectionFunction(operator) {
+        const direction = ModulatorHelper.getDirection(operator);
+        switch (direction) {
+            case ModulatorDirections.MinToMax:
+                return x => x;
+            case ModulatorDirections.MaxToMin: 
+                return x => 1 - x;
+            default:
+                return undefined;
+        }
+    }
+
+    /**
+     * Returns a function that maps an input value from [0,127] to an output value from [0,1]
+     * @param {*} operator 
+     */
+    static getSourceTypeFunction(operator) {
+        const sourceType = ModulatorHelper.getSourceType(operator);
+        switch (sourceType) {
+            case ModulatorSourceTypes.Linear:
+                return x => x / 127;
+            case ModulatorSourceTypes.Concave:
+                return x => ModulatorHelper.sourceTypeTable.concave[int(x)];
+            case ModulatorSourceTypes.Convex:
+                return x => ModulatorHelper.sourceTypeTable.convex[int(x)];
+            case ModulatorSourceTypes.Switch:
+                return x => x >= 64 ? 1 : 0;
+            default:
+                return undefined;
+        }
+    }
+
+    /**
+     * Returns a function that maps from [0,1] to [0,1]
+     * @param {*} transform 
+     */
+    static getTransformFunction(transform) {
+        switch (transform) {
+            case ModulatorTransforms.Linear:
+                return x => x;
+            case ModulatorTransforms.AbsoluteValue: 
+                return x => x > 0 ? x : -x;
+            default:
+                return undefined;
+        }
+    }
+
+    static getCompoundFunction(operator) {
+        const polarityFunction = ModulatorHelper.getPolarityFunction(operator);
+        const directionFunction = ModulatorHelper.getDirectionFunction(operator);
+        const sourceTypeFunction = ModulatorHelper.getSourceTypeFunction(operator);
+        return x => polarityFunction(directionFunction(sourceTypeFunction(x)));
+    }
+
+    static getModulatorFunction(modulatorEntry) {
+        const primarySourceFunction = ModulatorHelper.getCompoundFunction(modulatorEntry.modSrcOperator);
+        const secondarySourceFunction = ModulatorHelper.getCompoundFunction(modulatorEntry.modAmountSrcOperator);
+        const transformFunction = ModulatorHelper.getTransformFunction(modulatorEntry.modTransOperator);
+        const modAmount = modulatorEntry.modAmount;
+        return (primary, secondary) => 
+            transformFunction(primarySourceFunction(primary) * secondarySourceFunction(secondary) * modAmount);
+    }
+
+    static getLogProperty(amount) {
+        return (amount !== null) ? Math.pow(2, amount / 1200) : null;
+    }
+
+    static getLogFrequency(amount) {
+        return (amount !== null) ? GeneratorHelper.BaseFrequency * ModulatorHelper.getLogProperty(amount) : null;
+    }
+};
+
+class ConvexConcaveTable {
+    constructor() {
+        this.concave = new Float64Array(128);
+        this.convex = new Float64Array(128);
+        for (let i = 1; i < 127; i++) {
+            const x = -20/96 * Math.log10((i*i)/(127*127));
+            this.convex[i] = 1 - x;
+            this.concave[127-i] = x;
+        }
+        this.concave[0] = 0;
+        this.concave[127] = 1;
+        this.convex[0] = 0;
+        this.convex[127] = 1;
+    }
+}
+ModulatorHelper.sourceTypeTable = new ConvexConcaveTable();
+
 export class GeneratorHelper {
+    static get BaseFrequency() {
+        return 8.176;
+    }
+
     static getProperty(generators, property) {
         for (let generator of generators) {
             if (generator.genOperator === property) {
@@ -112,7 +291,6 @@ export class GeneratorHelper {
         const int16 = GeneratorHelper.getInt16Property(generators, property);
         return (int16 !== null) ? Math.pow(2, int16 / 1200) : null;
     }
-
 
     static getSampleID(generators) {
         return GeneratorHelper.getProperty(generators, GeneratorOperations.SampleID);
@@ -293,6 +471,33 @@ export class ModulatorEntry {
         this.modAmount = RiffParser.readWord(buffer, offset+4);
         this.modAmountSrcOperator = RiffParser.readWord(buffer, offset+6);
         this.modTransOperator = RiffParser.readWord(buffer, offset+8);
+    }
+
+    static getControllerParameter(controller, properties) {
+        switch (controller) {
+            case ModulatorControllers.NoController:
+                return 127;
+            case ModulatorControllers.NoteOnVelocity:
+                return properties == null ? 0 : (properties.hasOwnProperty('velocity') ? properties.velocity : 0);
+            case ModulatorControllers.NoteOnKeyNumber:
+                return properties == null ? 0 : (properties.hasOwnProperty('keyNumber') ? properties.keyNumber : 0);
+            default:
+                throw Error("Controller parameter support not yet implemented");
+        }
+    }
+
+    getModulatorFunction() {
+        return ModulatorHelper.getModulatorFunction(this);
+    }
+
+    getSourceParameter(properties) {
+        const controller = ModulatorHelper.getController(this.modSrcOperator);
+        return ModulatorEntry.getControllerParameter(controller, properties);
+    }
+
+    getAmountSourceParameter(properties) {
+        const controller = ModulatorHelper.getController(this.modAmountSrcOperator);
+        return ModulatorEntry.getControllerParameter(controller, properties);
     }
 }
 

@@ -2,6 +2,7 @@ import { Deck, Ease } from "./deck";
 import { Logger, DummyLogger, TestRandom, TestDateUtil } from "./utils";
 import { MusicCard } from "./musiccard";
 import { Queue } from "./card";
+import { Config } from "./config";
 
 let testLogger = new DummyLogger();
 let testRandom = new TestRandom();
@@ -41,9 +42,11 @@ test('Null shuffle', () => {
     }
 });
 
-test('Ensure we can answer 20 cards', () => {
+test('Ensure we can answer 4 new cards and they are moved to the learn queue', () => {
     const deck = generateTestDeck();
-    for (let i = 0; i < 20; i++) {
+    const newPerDay = deck.deckNewLimit();
+    expect(newPerDay).toBe(4); // deck new limit should be 4
+    for (let i = 0; i < newPerDay; i++) {
         const card = deck.getCard();
         expect(card).not.toBeNull();
         expect(card.queue).toBe(Queue.NEW);
@@ -53,10 +56,10 @@ test('Ensure we can answer 20 cards', () => {
         expect(card.queue).toBe(Queue.LEARN);
     }
     // we should have all those cards in the learn queue now
-    expect(deck.learnQueue.length).toBe(20);
+    expect(deck.learnQueue.length).toBe(newPerDay);
     // we will shuffle the learnQueue, so provide enough randomness for that (this will not change the order)
     testRandom.appendRandom(Array(deck.learnQueue.length).fill(0));
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < newPerDay; i++) {
         const card = deck.getCard();
         expect(card).not.toBeNull();
         expect(card.queue).toBe(Queue.LEARN);
@@ -64,4 +67,20 @@ test('Ensure we can answer 20 cards', () => {
     }
     const badCard = deck.getCard();
     expect(badCard).toBeNull();
+});
+
+
+test('Ensure startingLeft == 2002', () => {
+    const deck = generateTestDeck();
+    const card = deck.getCard();
+    expect(card).not.toBeNull();
+    expect(card.queue).toBe(Queue.NEW);
+    expect(card.left).toBe(0); // initially unset
+    // we will move the card to the learn queue, and reschedule it; supply the random we need to randomize the due date
+    testRandom.appendRandom([0]);
+    // This actually sets the card.left to 2002 (startingLeft), then 1001 (since we move it from new to learn, then call moveToNextStep)
+    deck.answerCard(card, Ease.GOOD);
+    expect(card.queue).toBe(Queue.LEARN);
+    expect(card.left).toBe(1001);
+    // FIXME: Don't pack two values in card.left
 });
