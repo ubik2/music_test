@@ -142,12 +142,31 @@ export class Player {
         return merged;
     }
 
+    /**
+     * Helper method to create a spec compliant ChannelMergerNode even on Safari
+     * @param {*} numberOfInputs 
+     */
+    createChannelMerger(numberOfInputs) {
+        const channelMergerNode = this.audioContext.createChannelMerger(numberOfInputs); // 1/explicit/speakers (2 channels on Safari)
+        if (channelMergerNode.channelCount != 1) { // Safari incorrectly sets these to 2 channels
+            channelMergerNode.channelCount = 1; // we can't generally set this, but Safari lets us
+        }
+        if (channelMergerNode.channelCountMode != "explicit") {
+            channelMergerNode.channelCountMode = "explicit";
+        }
+        return channelMergerNode;
+    }
+
     playBuffers(buffers, options = null) {
         const pitchShift = (options != null && options.hasOwnProperty('keyNumber')) ? options.keyNumber - this.baseKey : 0;
-        const source = this.audioContext.createBufferSource();
+        const source = this.audioContext.createBufferSource(); // 2/max/speakers
+        source.channelCount = buffers.length;
+        source.channelCountMode = "explicit";
+        source.channelInterpretation = "discrete";
         const audioBuffer = this.audioContext.createBuffer(buffers.length, buffers[0].buffer.length, this.audioContext.sampleRate);
-        const bufferSplitter = this.audioContext.createChannelSplitter(buffers.length);
-        source.connect(bufferSplitter);
+        source.buffer = audioBuffer;
+        const bufferSplitter = this.audioContext.createChannelSplitter(buffers.length); // x/explicit/discrete
+        source.connect(bufferSplitter, 0, 0);
         const gainNodesL = [];
         const gainNodesR = [];
         const globalModulators = Player.getMergedModulators(ModulatorHelper.getDefaultModulators(), this.globalModulators);
@@ -163,16 +182,22 @@ export class Player {
             }
 
             // Set up the initial attenuation modulator/generator
-            const initialAttenuation = this.audioContext.createGain();
-            bufferSplitter.connect(initialAttenuation, i);
+            const initialAttenuation = this.audioContext.createGain(); // 2/max/speakers
+            bufferSplitter.connect(initialAttenuation, i, 0);
+            initialAttenuation.channelCount = 1;
+            initialAttenuation.channelCountMode = "explicit";
+            initialAttenuation.channelInterpretation = "discrete";
             initialAttenuation.gain.value = 1;
             const initialAttenuationModulators = bufferModulators.filter(x => x.modDestOperator === GeneratorOperations.InitialAttenuation);
             const initialAttenuationCentibels = initialAttenuationModulators.map(x => -1 * Player.getModulatorValue(x, options));
             initialAttenuation.gain.value = Player.addCentibels(initialAttenuation.gain.value, initialAttenuationCentibels);
 
             // Set up the initial filter cutoff modulator/generator
-            const initialFilterCutoff = this.audioContext.createBiquadFilter();
-            initialAttenuation.connect(initialFilterCutoff);
+            const initialFilterCutoff = this.audioContext.createBiquadFilter(); // 2/max/speakers
+            initialAttenuation.connect(initialFilterCutoff, 0, 0);
+            initialFilterCutoff.channelCount = 1;
+            initialFilterCutoff.channelCountMode = "explicit";
+            initialFilterCutoff.channelInterpretation = "discrete";
             initialFilterCutoff.type = "lowpass";
             initialFilterCutoff.detune.value = 13500;
             initialFilterCutoff.frequency.value = GeneratorHelper.BaseFrequency;
@@ -181,27 +206,33 @@ export class Player {
             initialFilterCutoff.detune.value = initialFilterCutoffCents.reduce((t, v) => t + v, initialFilterCutoff.detune.value);
             
             // Set up the releaseVolumeEnvelope generator
-            const releaseVolumeEnvelope = this.audioContext.createGain();
-            initialFilterCutoff.connect(releaseVolumeEnvelope);
+            const releaseVolumeEnvelope = this.audioContext.createGain(); // 2/max/speakers
+            initialFilterCutoff.connect(releaseVolumeEnvelope, 0, 0);
+            releaseVolumeEnvelope.channelCount = 1;
+            releaseVolumeEnvelope.channelCountMode = "explicit";
+            releaseVolumeEnvelope.channelInterpretation = "discrete";
             releaseVolumeEnvelope.gain.value = 1;
             releaseVolumeEnvelope.gain.exponentialRampToValueAtTime(0.5, buffers[i].releaseVolumeEnvelope); // ramp down to half volume over half a second
             
             // Set up the pan generator
-            const monoSplitter = this.audioContext.createChannelSplitter(2);
-            releaseVolumeEnvelope.connect(monoSplitter);
-            const gainNodeL = this.audioContext.createGain();
-            const gainNodeR = this.audioContext.createGain();
-            gainNodeR.gain.value = .5 + (buffers[i].pan || 0);
+            const gainNodeL = this.audioContext.createGain(); // 2/max/speakers
+            releaseVolumeEnvelope.connect(gainNodeL, 0, 0);
+            gainNodeL.channelCount = 1;
+            gainNodeL.channelCountMode = "explicit";
+            gainNodeL.channelInterpretation = "discrete";
             gainNodeL.gain.value = .5 - (buffers[i].pan || 0);
-            // Attach our mono sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
-            monoSplitter.connect(gainNodeL, 0);
-            monoSplitter.connect(gainNodeR, 0);
+            const gainNodeR = this.audioContext.createGain(); // 2/max/speakers
+            releaseVolumeEnvelope.connect(gainNodeR, 0, 0);
+            gainNodeR.channelCount = 1;
+            gainNodeR.channelCountMode = "explicit";
+            gainNodeR.channelInterpretation = "discrete";
+            gainNodeR.gain.value = .5 + (buffers[i].pan || 0);
+            // Attach our sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
             gainNodesL.push(gainNodeL);
             gainNodesR.push(gainNodeR);
         }
         // Set up the fineTune generator, combined with the pitch shift to play the correct key
         // It should be possible to override this on the buffer level instead, but our sound font doesn't do this, so I didn't add support
-        source.buffer = audioBuffer;
         if (source.detune) {
             source.detune.value = (buffers[0].fineTune || 0) + 100 * pitchShift;
         } else { // Workaround for Safari
@@ -209,8 +240,10 @@ export class Player {
             source.playbackRate.value = Math.pow(2, detuneValue / 1200);
         }
         // Each buffer has been split with a gain node for each channel. Bring together all the channels for each side.
-        const mergerL = this.audioContext.createChannelMerger(gainNodesL.length);
-        const mergerR = this.audioContext.createChannelMerger(gainNodesR.length);
+        const mergerL = this.createChannelMerger(gainNodesL.length); // 1/explicit/speakers
+        const mergerR = this.createChannelMerger(gainNodesR.length); // 1/explicit/speakers
+        mergerL.channelInterpretation = "discrete";
+        mergerR.channelInterpretation = "discrete";
         for (let i = 0; i < gainNodesL.length; i++) {
             let gainNodeL = gainNodesL[i];
             gainNodeL.connect(mergerL, 0, i);
@@ -219,10 +252,12 @@ export class Player {
             let gainNodeR = gainNodesR[i];
             gainNodeR.connect(mergerR, 0, i);
         }
-        const merger = this.audioContext.createChannelMerger(2);
-        mergerL.connect(merger, 0, 0);
-        mergerR.connect(merger, 0, 1);
-        const masterGain = this.audioContext.createGain();
+        const merger = this.createChannelMerger(2); // 1/explicit/speakers
+        mergerL.connect(merger, 0, 0); // connect mergerL output 0 to merger input 0
+        mergerR.connect(merger, 0, 1); // connect mergerR output 0 to merger input 1
+        const masterGain = this.audioContext.createGain(); // 2/max/speakers
+        masterGain.channelCountMode = "explicit";
+        masterGain.channelInterpretation = "discrete";
         masterGain.gain.value = 1;
         merger.connect(masterGain);
         masterGain.connect(this.audioContext.destination);
