@@ -56,6 +56,10 @@ export class IndexPage {
         return config;
     }
 
+    getConfig() {
+        return Config.instance();
+    }
+
     showMenu() {
         // refresh the counts
         for (const deck of this.decks) {
@@ -65,6 +69,7 @@ export class IndexPage {
         document.getElementById("main").hidden = false;
         document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = true;
+        document.getElementById("settings").hidden = true;
     }
 
     showCards(deck) {
@@ -74,6 +79,7 @@ export class IndexPage {
         document.getElementById("main").hidden = true;
         document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = false;
+        document.getElementById("settings").hidden = true;
         window.frames["cards"].src = "card.html";
         window.frames["cards"].onload = () => {
             window.frames["cards"].contentWindow.cardPage.setupCardPage(deck, this.player);
@@ -87,10 +93,25 @@ export class IndexPage {
         document.getElementById("main").hidden = true;
         document.getElementById("cards").hidden = true;
         document.getElementById("practice").hidden = false;
+        document.getElementById("settings").hidden = true;
         window.frames["practice"].src = "practice.html";
         window.frames["practice"].onload = () => {
             window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck, this.player);
             console.log('indexpage: loaded practice');
+        };
+    }
+
+    showSettings() {
+        this.frequencyAnalyser.stop();
+        document.getElementById("main").hidden = true;
+        document.getElementById("cards").hidden = true;
+        document.getElementById("practice").hidden = true;
+        document.getElementById("settings").hidden = false;
+
+        window.frames["settings"].src = "settings.html";
+        window.frames["settings"].onload = () => {
+            window.frames["settings"].contentWindow.settingsPage.setupSettingsPage();
+            console.log('indexpage: loaded settings page');
         };
     }
 
@@ -242,6 +263,9 @@ export class IndexPage {
                 });
             });
         });
+
+        document.getElementById("settingsButton").addEventListener("click", () => this.showSettings());
+        document.getElementById("settingsButton").hidden = false;
     }
 
     addRowForDeck() {
