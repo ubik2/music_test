@@ -6,7 +6,7 @@ export class Player {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.audioContext = new AudioContext({sampleRate: 44100});
         this.buffers = null;
-        this.globalModulators = null;
+        this.global = null;
         this.baseKey = 48; // C4 - we're going to pull this sample from the soundfont
         this.releaseTime = .1; // 25 ms is enough time for the peak of a 20 Hz wave to get back to neutral
         this.nextNoteID = 0;
@@ -34,8 +34,8 @@ export class Player {
                 const samplesChunk = pdtaChunk.getChunk('shdr');
                 const buffers = [];
                 const global = {
-                    fineTune: 0, // default of 0
-                    pan: 0, // default of 0 -> 0/100
+                    fineTune: 0, // default of 0 cents
+                    pan: 0, // default of 0% -> 0/100
                     releaseVolumeEnvelope: 1/(1<<10) // default of -12000 -> 2^-10
                 };
                 for (let bagEntry of instrument.instrumentBags) {
@@ -61,7 +61,7 @@ export class Player {
                     }
                 }
                 this.buffers = buffers;
-                this.globalModulators = global.modulators;
+                this.global = global;
                 this.activeSources = {};
                 if (callback !== null) {
                     callback(this);
@@ -75,15 +75,15 @@ export class Player {
             if (arg != null) {
                 return arg;
             }
-            return null;
         }
+        return null;
     }
 
     triggerAttack(keyNumber) {
         if (this.activeSources == null) {
             return null;
         }
-        const trackingObject = this.playBuffers(this.buffers, { velocity: 100, keyNumber: keyNumber } );
+        const trackingObject = this.playBuffers(this.buffers, this.global, { velocity: 100, keyNumber: keyNumber } );
         this.activeSources[trackingObject.noteId] = trackingObject;
         return trackingObject.noteId;
     }
@@ -157,7 +157,7 @@ export class Player {
         return channelMergerNode;
     }
 
-    playBuffers(buffers, options = null) {
+    playBuffers(buffers, global, options = null) {
         const pitchShift = (options != null && options.hasOwnProperty('keyNumber')) ? options.keyNumber - this.baseKey : 0;
         const source = this.audioContext.createBufferSource(); // 2/max/speakers
         source.channelCount = buffers.length;
@@ -169,7 +169,7 @@ export class Player {
         source.connect(bufferSplitter, 0, 0);
         const gainNodesL = [];
         const gainNodesR = [];
-        const globalModulators = Player.getMergedModulators(ModulatorHelper.getDefaultModulators(), this.globalModulators);
+        const globalModulators = Player.getMergedModulators(ModulatorHelper.getDefaultModulators(), global.modulators);
         for (let i = 0; i < buffers.length; i++) {
             const bufferModulators = Player.getMergedModulators(globalModulators, buffers[i].modulators);
             // Populate our audio buffer
