@@ -147,7 +147,7 @@ export class Player {
      * @param {*} numberOfInputs 
      */
     createChannelMerger(numberOfInputs) {
-        const channelMergerNode = this.audioContext.createChannelMerger(numberOfInputs); // 1/explicit/speakers (2 channels on Safari)
+        const channelMergerNode = this.audioContext.createChannelMerger(numberOfInputs); // 1/explicit/speakers (2/max/speakers on Safari)
         if (channelMergerNode.channelCount != 1) { // Safari incorrectly sets these to 2 channels
             channelMergerNode.channelCount = 1; // we can't generally set this, but Safari lets us
         }
