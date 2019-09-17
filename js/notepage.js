@@ -141,10 +141,6 @@ export class NotePage {
             this.activeNotes = this.activeNotes.filter((value, index, array) => value[1] != keyValue);
             matchingNoteEntries.forEach((value, index, array) => this.player.cleanup(value[0]));
         });
-        if (this.renderer !== null) {
-            note.setStyle(this.noteDefaultStyle);
-            this.displayNotes();
-        }
     }
 
     onNotePreEnd(time, note) {
@@ -153,6 +149,10 @@ export class NotePage {
             const matchingNoteEntries = this.activeNotes.filter((value, index, array) => value[1] == keyValue);
             matchingNoteEntries.forEach((value, index, array) => this.player.triggerRelease(value[0]));
         });
+        if (this.renderer !== null) {
+            note.setStyle(this.noteDefaultStyle);
+            this.displayNotes();
+        }
     }
 
     /**
@@ -167,17 +167,17 @@ export class NotePage {
         }
         this.schedule.cancel();
         let timeOffset = 0;
-        const releaseTime = this.player.releaseTime;
+        const releaseTime = this.player.releaseTime * 3; // At this point, we will be at 5% volume
         const scheduleStopTime = 0.1;
         notes.forEach((note) => {
             const start = timeOffset;
             const end = start + NotePage.getDuration(note);
             timeOffset = end;
             this.schedule.add(start, (time) => this.onNoteStart(time, note));
-            this.schedule.add(end - releaseTime, (time) => this.onNotePreEnd(time, note));
-            this.schedule.add(end, (time) => this.onNoteEnd(time, note));
+            this.schedule.add(end, (time) => this.onNotePreEnd(time, note));
+            this.schedule.add(end + releaseTime, (time) => this.onNoteEnd(time, note));
         });
-        this.schedule.add(timeOffset + scheduleStopTime, (time) => this.schedule.stop());
+        this.schedule.add(timeOffset + releaseTime + scheduleStopTime, (time) => this.schedule.stop());
         this.schedule.start();
     }
 

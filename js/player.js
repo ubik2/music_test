@@ -8,7 +8,7 @@ export class Player {
         this.buffers = null;
         this.globalModulators = null;
         this.baseKey = 48; // C4 - we're going to pull this sample from the soundfont
-        this.releaseTime = .05; // 25 ms is enough time for the peak of a 20 Hz wave to get back to neutral
+        this.releaseTime = .1; // 25 ms is enough time for the peak of a 20 Hz wave to get back to neutral
         this.nextNoteID = 0;
         this.activeSources = null;
         fetch(url).then(response => {
@@ -262,7 +262,8 @@ export class Player {
         merger.connect(masterGain);
         masterGain.connect(this.audioContext.destination);
         source.start();
-        return { source: source, gain: masterGain, noteId: this.nextNodeID++ };
+        const noteId = this.nextNoteID++;
+        return { source: source, gain: masterGain, noteId: noteId };
     }
 
     dispose() {
