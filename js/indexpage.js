@@ -290,7 +290,7 @@ export class IndexPage {
         buttonElement.setAttribute('id', 'button' + this.lastRowCount);
         buttonElement.setAttribute('class', 'button');
         buttonElement.setAttribute("value", "Study Now");
-        buttonElement.enabled = false;
+        buttonElement.disabled = true;
         buttonTableElement.appendChild(buttonElement);
         tableRow.appendChild(buttonTableElement);
         const practiceButtonTableElement = document.createElement('td');
@@ -299,7 +299,7 @@ export class IndexPage {
         practiceButtonElement.setAttribute('id', 'practiceButton' + this.lastRowCount);
         practiceButtonElement.setAttribute('class', 'button');
         practiceButtonElement.setAttribute("value", "Practice Now");
-        practiceButtonElement.enabled = false;
+        practiceButtonElement.disabled = true;
         practiceButtonTableElement.appendChild(practiceButtonElement);
         tableRow.appendChild(practiceButtonTableElement);
         tableElement.appendChild(tableRow);
@@ -313,12 +313,12 @@ export class IndexPage {
         document.getElementById("review" + idSuffix).innerText = inDeck.reviewCount;
         const buttonElement = document.getElementById("button" + idSuffix);
         if (this.soundFontLoaded) {
-            buttonElement.enabled = true;
+            buttonElement.disabled = false;
             buttonElement.onclick = () => this.showCards(inDeck);
         }
         const practiceButtonElement = document.getElementById("practiceButton" + idSuffix);
         if (this.soundFontLoaded) {
-            practiceButtonElement.enabled = true;
+            practiceButtonElement.disabled = false;
             practiceButtonElement.onclick = () => this.showPractice(inDeck);
         }
     }

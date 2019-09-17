@@ -12,8 +12,7 @@ div.score {
 input.button {
   -webkit-appearance: none;
   -moz-appearance: none;
-   appearance: none;
-   border-radius: 0;
+  border-radius: 0;
   font-size: 20px;
   background: lightgrey;
   border: none;
