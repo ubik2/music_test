@@ -6,7 +6,7 @@
     <link href="css/default.css" rel="stylesheet" />
     <script type="module" src="js/index_helper.js"></script>
 </head>
-<body>
+<body height="100%">
     <div id="currentNote" style="height: 1.1em; line-height: 1.1; overflow: auto;"></div>
     <canvas id="frequencyCanvas" width="640" height="200" hidden></canvas>
     <div id="main">
@@ -15,13 +15,13 @@
             <tr><th>Scale</th><th>New</th><th>Learning</th><th>Review</th></tr>
         </table>
     </div>
-    <iframe id="cards" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden></iframe>
+    <iframe id="cards" src="about:blank" allow="autoplay" width="1000" height="400" frameborder="0" hidden></iframe>
     <audio id="player" controls hidden></audio>
 
-    <iframe id="practice" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden></iframe>
+    <iframe id="practice" src="about:blank" allow="autoplay" width="1000" height="400" frameborder="0" hidden></iframe>
 
-    <iframe id="settings" src="about:blank" allow="autoplay" width="400" height="400" frameborder="0" hidden></iframe>
+    <iframe id="settings" src="about:blank" allow="autoplay" width="1000" height="400" frameborder="0" hidden></iframe>
 
-    <input type="button" value="Settings" id="settingsButton" hidden>
+    <input type="button" class="button" value="Settings" id="settingsButton" hidden>
 </body>
 </html>

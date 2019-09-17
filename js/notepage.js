@@ -23,7 +23,8 @@ export class NotePage {
     static createRenderer() {
         const div = document.getElementById("score");
         const renderer = new Vex.Flow.Renderer(div, Vex.Flow.Renderer.Backends.SVG);
-        renderer.resize(200, 200);
+        renderer.resize(div.clientWidth, div.clientHeight); // fill the div
+        renderer.getContext().scale(2, 2); // this will set the viewBox (effectively zooming)
         return renderer;
     }
 

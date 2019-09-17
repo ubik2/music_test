@@ -3,3 +3,19 @@
   touch-action: manipulation;
   */
 }
+
+div.score {
+  height: 320px;
+  width: 800px;
+}
+
+input.button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+   appearance: none;
+   border-radius: 0;
+  font-size: 20px;
+  background: lightgrey;
+  border: none;
+  padding: 10px 20px;
+}
