@@ -64,6 +64,10 @@ export class Schedule {
         return entry;
     }
 
+    addRelative(time, func) {
+        return this.add(this.timeSinceStart + time, func);
+    }
+
     /**
      * Start the schedule
      */
@@ -110,6 +114,10 @@ export class Schedule {
         if (lastEntryIndex >= 0) {
             this.entries.splice(0, lastEntryIndex + 1);
         }
+    }
+
+    get timeSinceStart() {
+        return this.clock.elapsed - this.startOffset;
     }
 }
 

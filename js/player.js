@@ -1,4 +1,34 @@
 import { GeneratorHelper, GeneratorOperations, ModulatorHelper } from "./sf2parser";
+import { Schedule, Clock } from "./clock";
+
+class ReleaseHelper {
+    constructor() {
+        this.releaseVolumeEnvelopeNodes = [];
+        this.releaseVolumeEnvelopeValues = [];
+    }
+
+    get releaseTime() {
+        return Math.max(...this.releaseVolumeEnvelopeValues);
+    }
+
+    onRelease() {
+        for (let i = 0; i < this.releaseVolumeEnvelopeNodes.length; i++) {
+            let gainNode = this.releaseVolumeEnvelopeNodes[i];
+            let startTime = gainNode.context.currentTime;
+            let endTime = startTime + this.releaseVolumeEnvelopeValues[i];
+            // 100dB attenuation over release time - releaseVolumeEnvelope is linear in dB/s, but exponential in gain.
+            if (gainNode.gain.value > 0) {
+                gainNode.gain.setValueAtTime(gainNode.gain.value, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(gainNode.gain.value / 10000, endTime);
+            }
+        }
+    }
+
+    addNode(node, value) {
+        this.releaseVolumeEnvelopeNodes.push(node);
+        this.releaseVolumeEnvelopeValues.push(value);
+    }
+}
 
 export class Player {
     constructor(parser, url, callback = null) {
@@ -8,7 +38,8 @@ export class Player {
         this.buffers = null;
         this.global = null;
         this.baseKey = 48; // C4 - we're going to pull this sample from the soundfont
-        this.releaseTime = .1; // 25 ms is enough time for the peak of a 20 Hz wave to get back to neutral
+        this.clock = Clock.instance();
+        this.schedule = new Schedule(this.clock);
         this.nextNoteID = 0;
         this.activeSources = null;
         fetch(url).then(response => {
@@ -85,6 +116,9 @@ export class Player {
         }
         const trackingObject = this.playBuffers(this.buffers, this.global, { velocity: 100, keyNumber: keyNumber } );
         this.activeSources[trackingObject.noteId] = trackingObject;
+        if (!this.schedule.active) {
+            this.schedule.start();
+        }
         return trackingObject.noteId;
     }
 
@@ -94,7 +128,8 @@ export class Player {
         }
         const trackingObject = this.activeSources[noteId];
         if (trackingObject != null) {
-            trackingObject.gain.gain.setTargetAtTime(0, this.audioContext.currentTime, this.releaseTime);
+            trackingObject.asdrNode.onRelease();
+            this.schedule.addRelative(trackingObject.asdrNode.releaseTime, (time) => this.cleanup(noteId));
         }
     }
 
@@ -106,6 +141,9 @@ export class Player {
         if (trackingObject != null) {
             trackingObject.source.stop();
             delete this.activeSources[noteId];
+        }
+        if (this.activeSources.length == 0) {
+            this.schedule.stop();
         }
     }
 
@@ -170,6 +208,7 @@ export class Player {
         const gainNodesL = [];
         const gainNodesR = [];
         const globalModulators = Player.getMergedModulators(ModulatorHelper.getDefaultModulators(), global.modulators);
+        const releaseHelper = new ReleaseHelper();
         for (let i = 0; i < buffers.length; i++) {
             const bufferModulators = Player.getMergedModulators(globalModulators, buffers[i].modulators);
             // Populate our audio buffer
@@ -212,7 +251,7 @@ export class Player {
             releaseVolumeEnvelope.channelCountMode = "explicit";
             releaseVolumeEnvelope.channelInterpretation = "discrete";
             releaseVolumeEnvelope.gain.value = 1;
-            releaseVolumeEnvelope.gain.exponentialRampToValueAtTime(0.5, buffers[i].releaseVolumeEnvelope); // ramp down to half volume over half a second
+            releaseHelper.addNode(releaseVolumeEnvelope, buffers[i].releaseVolumeEnvelope);
             
             // Set up the pan generator
             const gainNodeL = this.audioContext.createGain(); // 2/max/speakers
@@ -263,7 +302,7 @@ export class Player {
         masterGain.connect(this.audioContext.destination);
         source.start();
         const noteId = this.nextNoteID++;
-        return { source: source, gain: masterGain, noteId: noteId };
+        return { source: source, asdrNode: releaseHelper, noteId: noteId };
     }
 
     dispose() {
@@ -274,5 +313,6 @@ export class Player {
             trackingObject.source.stop();
         }
         this.activeSources = null;
+        this.schedule.dispose();
     }
 }
