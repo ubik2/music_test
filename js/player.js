@@ -153,7 +153,7 @@ export class Player {
     }
 
     static addCentibels(gain, entries) {
-        let dbLevel = 20 * Math.log10(gain);
+        let dbLevel = (gain > 0) ? 20 * Math.log10(gain) : -1000;
         for (let centibels of entries) {
            dbLevel = dbLevel + centibels / 100; 
         }
