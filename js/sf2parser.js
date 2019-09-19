@@ -59,6 +59,7 @@ export const GeneratorOperations = {
     VibratoLFOToPitch: 6,
     ModulationEnvelopeToPitch: 7,
     InitialFilterCutoff: 8,
+    InitialFilterQ: 9,
     //
     EndAddressCoarseOffset: 12,
     //
