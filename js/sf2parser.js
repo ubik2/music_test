@@ -80,7 +80,9 @@ export const GeneratorOperations = {
     //
     StartLoopAddressCoarseOffset: 45,
     KeyNumber: 46,
-    //
+    Velocity: 47,
+    InitialAttenuation: 48,
+    Reserved2: 49,
     EndLoopAddressCoarseOffset: 50,
     CoarseTune: 51,
     FineTune: 52,
@@ -138,12 +140,14 @@ export class ModulatorHelper {
     }
 
     static getMatchingModulators(modulators, modDestOperator) {
+        return modulators.filter(x => x.modDestOperator === modDestOperator);
+        let matches = [];
         for (let modulator of modulators) {
             if (modulator.modDestOperator === modDestOperator) {
-                return modulator;
+                matches.push(modulator);
             }
         }
-        return null;
+        return matches;
     }
 
     static getController(operator) {
@@ -174,7 +178,7 @@ export class ModulatorHelper {
             case ModulatorPolarities.Unipolar: 
                 return x => x;
             case ModulatorPolarities.Bipolar: 
-                return x => 2 * x - 1;
+                return x => 2 * x - 1; // FIXME: this is broken
             default:
                 return undefined;
         }
@@ -185,7 +189,7 @@ export class ModulatorHelper {
     }
 
     /**
-     * Returns a function that maps from [0,1] to [0,1]
+     * Returns a function that maps from [0,127] to [0,127]
      * @param {*} operator 
      */
     static getDirectionFunction(operator) {
@@ -194,7 +198,7 @@ export class ModulatorHelper {
             case ModulatorDirections.MinToMax:
                 return x => x;
             case ModulatorDirections.MaxToMin: 
-                return x => 1 - x;
+                return x => 127 - x;
             default:
                 return undefined;
         }
@@ -236,10 +240,10 @@ export class ModulatorHelper {
     }
 
     static getCompoundFunction(operator) {
-        const polarityFunction = ModulatorHelper.getPolarityFunction(operator);
         const directionFunction = ModulatorHelper.getDirectionFunction(operator);
         const sourceTypeFunction = ModulatorHelper.getSourceTypeFunction(operator);
-        return x => polarityFunction(directionFunction(sourceTypeFunction(x)));
+        const polarityFunction = ModulatorHelper.getPolarityFunction(operator);
+        return x => polarityFunction(sourceTypeFunction(directionFunction(x)));
     }
 
     static getModulatorFunction(modulatorEntry) {
@@ -313,14 +317,14 @@ export class GeneratorHelper {
         return null;
     }
 
-    static getInt16Property(generators, property) {
+    static getInt16Property(generators, property, defaultValue = null) {
         const genAmount = GeneratorHelper.getProperty(generators, property);
-        return (genAmount !== null && genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount;
+        return (genAmount !== null) ? ((genAmount > 0x7FFF) ? genAmount - 0x10000 : genAmount) : defaultValue;
     }
 
-    static getLogProperty(generators, property) {
+    static getLogProperty(generators, property, defaultValue = null) {
         const int16 = GeneratorHelper.getInt16Property(generators, property);
-        return (int16 !== null) ? Math.pow(2, int16 / 1200) : null;
+        return (int16 !== null) ? Math.pow(2, int16 / 1200) : defaultValue;
     }
 
     static getSampleID(generators) {

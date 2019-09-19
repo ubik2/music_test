@@ -1,32 +1,75 @@
 import { GeneratorHelper, GeneratorOperations, ModulatorHelper } from "./sf2parser";
 import { Schedule, Clock } from "./clock";
 
-class ReleaseHelper {
+const EnvelopePhases = {
+    Delay: 0,
+    Attack: 1,
+    Hold: 2,
+    Decay: 3,
+    Sustain: 4,
+    Release: 5
+};
+
+class EnvelopeHelper {
     constructor() {
-        this.releaseVolumeEnvelopeNodes = [];
-        this.releaseVolumeEnvelopeValues = [];
+        this.gainNodes = [];
+        this.envelopeValues = [];
     }
 
     get releaseTime() {
-        return Math.max(...this.releaseVolumeEnvelopeValues);
+        return Math.max(...this.envelopeValues.map(x => x[EnvelopePhases.Release]));
+    }
+
+    onAttack() {
+        for (let i = 0; i < this.gainNodes.length; i++) {
+            let gainNode = this.gainNodes[i];
+            let startTime = gainNode.context.currentTime;
+            let envelopeValues = this.envelopeValues[i];
+            let delayEndTime = startTime + envelopeValues[EnvelopePhases.Delay]; // in seconds
+            let attackEndTime = delayEndTime + envelopeValues[EnvelopePhases.Attack]; // in seconds
+            let holdEndTime = attackEndTime + envelopeValues[EnvelopePhases.Hold]; // in seconds
+            let decayTimeMax = envelopeValues[EnvelopePhases.Decay]; // in seconds
+            let decayEndTimeMax = holdEndTime + decayTimeMax;
+            let sustainValue = envelopeValues[EnvelopePhases.Sustain] / 1000; // sustain is in tenths of a percent
+            let sustainValue_cB = Math.max(Player.amplitudeToCentibels(1 - sustainValue), -1000); // limit the minimum to -100dB
+            let decayTime = decayTimeMax * -sustainValue_cB / 1000; // decay is linear in cB, covering 100dB (1000cB) in decayTimeMax
+            let decayEndTime = holdEndTime + decayTime;
+            gainNode.gain.cancelScheduledValues(startTime);
+            gainNode.gain.setValueAtTime(0, startTime);
+            gainNode.gain.setValueAtTime(0, delayEndTime);
+            // Attack curve is linear in amplitude (convex in dB)
+            gainNode.gain.linearRampToValueAtTime(1, attackEndTime);
+            gainNode.gain.setValueAtTime(1, holdEndTime);
+            if (decayTime > 0) { // we don't have a decay if sustainValue is 0dB
+                gainNode.gain.exponentialRampToValueAtTime(1 / 10000, decayEndTimeMax); // -100dB
+            }
+            gainNode.gain.cancelScheduledValues(decayEndTime);
+            gainNode.gain.setValueAtTime(Player.centibelsToAmplitude(sustainValue_cB), decayEndTime);
+        }
     }
 
     onRelease() {
-        for (let i = 0; i < this.releaseVolumeEnvelopeNodes.length; i++) {
-            let gainNode = this.releaseVolumeEnvelopeNodes[i];
+        for (let i = 0; i < this.gainNodes.length; i++) {
+            let gainNode = this.gainNodes[i];
             let startTime = gainNode.context.currentTime;
-            let endTime = startTime + this.releaseVolumeEnvelopeValues[i];
-            // 100dB attenuation over release time - releaseVolumeEnvelope is linear in dB/s, but exponential in gain.
-            if (gainNode.gain.value > 0) {
-                gainNode.gain.setValueAtTime(gainNode.gain.value, startTime);
-                gainNode.gain.exponentialRampToValueAtTime(gainNode.gain.value / 10000, endTime);
+            let envelopeValues = this.envelopeValues[i];
+            let releaseTimeMax = envelopeValues[EnvelopePhases.Release];
+            let sustainValue = envelopeValues[EnvelopePhases.Sustain] / 1000; // sustain is in tenths of a percent
+            let sustainValue_cB = Math.max(Player.amplitudeToCentibels(1 - sustainValue), -1000); // limit the minimum to -100dB
+            let releaseTime = releaseTimeMax * (1 + sustainValue_cB / 1000); // release is linear in dB, covering 100dB (1000cB) in releaseTimeMax
+            let releaseEndTime = startTime + releaseTime;
+            gainNode.gain.cancelScheduledValues(startTime);
+            gainNode.gain.setValueAtTime(Player.centibelsToAmplitude(sustainValue_cB), startTime);
+            if (releaseTime > 0) { // we don't have a release if sustainValue is 100dB
+                gainNode.gain.exponentialRampToValueAtTime(1 / 10000, releaseEndTime); // -100dB
             }
+            gainNode.gain.setValueAtTime(0, releaseEndTime);
         }
     }
 
     addNode(node, value) {
-        this.releaseVolumeEnvelopeNodes.push(node);
-        this.releaseVolumeEnvelopeValues.push(value);
+        this.gainNodes.push(node);
+        this.envelopeValues.push(value);
     }
 }
 
@@ -66,18 +109,33 @@ export class Player {
                 const buffers = [];
                 const global = {
                     fineTune: 0, // default of 0 cents
-                    pan: 0, // default of 0% -> 0/100
-                    releaseVolumeEnvelope: 1/(1<<10) // default of -12000 -> 2^-10
+                    pan: 0, // default of 0 tenths of a percent
+                    delayVolumeEnvelope: -12000, // -12000 timecents
+                    attackVolumeEnvelope: -12000, // -12000 timecents
+                    holdVolumeEnvelope: -12000, // -12000 timecents
+                    decayVolumeEnvelope: -12000, // -12000 timecents
+                    sustainVolumeEnvelope: 0, // default of 0 cB
+                    releaseVolumeEnvelope: -12000, // -12000 timecents
                 };
                 for (let bagEntry of instrument.instrumentBags) {
                     let sampleID = GeneratorHelper.getSampleID(bagEntry.generators);
-                    let pan = GeneratorHelper.getPan(bagEntry.generators);
-                    let releaseVolumeEnvelope = GeneratorHelper.getReleaseVolumeEnvelope(bagEntry.generators);
-                    let fineTune = GeneratorHelper.getFineTune(bagEntry.generators);
+                    let fineTune = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.FineTune);
+                    let pan = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.Pan);
+                    let delayVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.DelayVolumeEnvelope);
+                    let attackVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.AttackVolumeEnvelope);
+                    let holdVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.HoldVolumeEnvelope);
+                    let decayVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.DecayVolumeEnvelope);
+                    let sustainVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.SustainVolumeEnvelope);
+                    let releaseVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.ReleaseVolumeEnvelope);
                     if (sampleID !== null) {
                         buffers.push({
                             fineTune: Player.firstNonNull(fineTune, global.fineTune),
-                            pan: Player.firstNonNull(pan ? pan / 100 : null, global.pan), 
+                            pan: Player.firstNonNull(pan, global.pan), 
+                            delayVolumeEnvelope: Player.firstNonNull(delayVolumeEnvelope, global.delayVolumeEnvelope),
+                            attackVolumeEnvelope: Player.firstNonNull(attackVolumeEnvelope, global.attackVolumeEnvelope),
+                            holdVolumeEnvelope: Player.firstNonNull(holdVolumeEnvelope, global.holdVolumeEnvelope),
+                            decayVolumeEnvelope: Player.firstNonNull(decayVolumeEnvelope, global.decayVolumeEnvelope),
+                            sustainVolumeEnvelope: Player.firstNonNull(sustainVolumeEnvelope, global.sustainVolumeEnvelope),
                             releaseVolumeEnvelope: Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope),
                             buffer: Float32Array.from(samplesChunk.samples[sampleID].sampleBuffer, val => val / 32768),
                             // For now, I'm dropping the SF2 modulators in directly. These should really be a backend agnostic class.
@@ -85,9 +143,14 @@ export class Player {
                         });
                     } else if (bagEntry === instrument.instrumentBags[0]) {
                         // If the first record has no sample, it's a global set of properties
-                        global.fineTune = fineTune;
-                        global.pan = pan ? pan / 100 : null;
-                        global.releaseVolumeEnvelope = releaseVolumeEnvelope;
+                        global.fineTune = Player.firstNonNull(fineTune, global.fineTune);
+                        global.pan = Player.firstNonNull(pan, global.pan);
+                        global.delayVolumeEnvelope = Player.firstNonNull(delayVolumeEnvelope, global.decayVolumeEnvelope);
+                        global.attackVolumeEnvelope = Player.firstNonNull(attackVolumeEnvelope, global.attackVolumeEnvelope);
+                        global.holdVolumeEnvelope = Player.firstNonNull(holdVolumeEnvelope, global.holdVolumeEnvelope);
+                        global.decayVolumeEnvelope = Player.firstNonNull(decayVolumeEnvelope, global.decayVolumeEnvelope);
+                        global.sustainVolumeEnvelope = Player.firstNonNull(sustainVolumeEnvelope, global.sustainVolumeEnvelope);
+                        global.releaseVolumeEnvelope = Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope);
                         global.modulators = bagEntry.modulators;
                     }
                 }
@@ -116,6 +179,7 @@ export class Player {
         }
         const trackingObject = this.playBuffers(this.buffers, this.global, { velocity: 100, keyNumber: keyNumber } );
         this.activeSources[trackingObject.noteId] = trackingObject;
+        trackingObject.envelopeHelper.onAttack();
         if (!this.schedule.active) {
             this.schedule.start();
         }
@@ -128,8 +192,8 @@ export class Player {
         }
         const trackingObject = this.activeSources[noteId];
         if (trackingObject != null) {
-            trackingObject.asdrNode.onRelease();
-            this.schedule.addRelative(trackingObject.asdrNode.releaseTime, (time) => this.cleanup(noteId));
+            trackingObject.envelopeHelper.onRelease();
+            this.schedule.addRelative(trackingObject.envelopeHelper.releaseTime, (time) => this.cleanup(noteId));
         }
     }
 
@@ -147,17 +211,36 @@ export class Player {
         }
     }
 
+    static getModulatedValue(bufferModulators, generatorOperation, options, baseValue = 0) {
+        const modulators = bufferModulators.filter(x => x.modDestOperator === generatorOperation);
+        const modulatorValues = modulators.map(x => Player.getModulatorValue(x, options));
+        return modulatorValues.reduce((t, v) => t + v, baseValue);
+    }
+
     static getModulatorValue(modulator, options) {
         const sourceFunction = ModulatorHelper.getModulatorFunction(modulator);
         return sourceFunction(modulator.getSourceParameter(options), modulator.getAmountSourceParameter(options));
     }
 
-    static addCentibels(gain, entries) {
-        let dbLevel = (gain > 0) ? 20 * Math.log10(gain) : -1000;
-        for (let centibels of entries) {
-           dbLevel = dbLevel + centibels / 100; 
-        }
-        return Math.pow(10, dbLevel / 20);
+    static amplitudeToDecibels(amplitude) {
+        return (amplitude > 0) ? 20 * Math.log10(amplitude) : -1000;
+    }
+
+    static amplitudeToCentibels(amplitude) {
+        return 10 * Player.amplitudeToDecibels(amplitude);
+    }
+
+    static decibelsToAmplitude(decibels) {
+        return Math.pow(10, decibels / 20);
+    }
+
+    static centibelsToAmplitude(centibels) {
+        return Player.decibelsToAmplitude(centibels / 10);
+    }
+
+    static addCentibels(amplitude, centibels) {
+        let initialCentibels = Player.amplitudeToCentibels(amplitude);
+        return Player.centibelsToAmplitude(initialCentibels + centibels);
     }
 
     static getMergedModulators(originals, others) {
@@ -208,7 +291,7 @@ export class Player {
         const gainNodesL = [];
         const gainNodesR = [];
         const globalModulators = Player.getMergedModulators(ModulatorHelper.getDefaultModulators(), global.modulators);
-        const releaseHelper = new ReleaseHelper();
+        const envelopeHelper = new EnvelopeHelper();
         for (let i = 0; i < buffers.length; i++) {
             const bufferModulators = Player.getMergedModulators(globalModulators, buffers[i].modulators);
             // Populate our audio buffer
@@ -220,6 +303,8 @@ export class Player {
                 buffer.set(float32Array);
             }
 
+            // TODO: InitialAttenuation and InitialFilterCutoff could pull from generator
+
             // Set up the initial attenuation modulator/generator
             const initialAttenuation = this.audioContext.createGain(); // 2/max/speakers
             bufferSplitter.connect(initialAttenuation, i, 0);
@@ -227,9 +312,8 @@ export class Player {
             initialAttenuation.channelCountMode = "explicit";
             initialAttenuation.channelInterpretation = "discrete";
             initialAttenuation.gain.value = 1;
-            const initialAttenuationModulators = bufferModulators.filter(x => x.modDestOperator === GeneratorOperations.InitialAttenuation);
-            const initialAttenuationCentibels = initialAttenuationModulators.map(x => -1 * Player.getModulatorValue(x, options));
-            initialAttenuation.gain.value = Player.addCentibels(initialAttenuation.gain.value, initialAttenuationCentibels);
+            const initialAttenuationCentibels = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialAttenuation, options, 0);
+            initialAttenuation.gain.value = Player.addCentibels(initialAttenuation.gain.value, -initialAttenuationCentibels);
 
             // Set up the initial filter cutoff modulator/generator
             const initialFilterCutoff = this.audioContext.createBiquadFilter(); // 2/max/speakers
@@ -240,32 +324,39 @@ export class Player {
             initialFilterCutoff.type = "lowpass";
             initialFilterCutoff.detune.value = 13500;
             initialFilterCutoff.frequency.value = GeneratorHelper.BaseFrequency;
-            const initialFilterCutoffModulators = bufferModulators.filter(x => x.modDestOperator === GeneratorOperations.InitialFilterCutoff);
-            const initialFilterCutoffCents = initialFilterCutoffModulators.map(x => Player.getModulatorValue(x, options));
-            initialFilterCutoff.detune.value = initialFilterCutoffCents.reduce((t, v) => t + v, initialFilterCutoff.detune.value);
+            const initialFilterCutoffCents = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialFilterCutoff, options, initialFilterCutoff.detune.value);;
+            initialFilterCutoff.detune.value = initialFilterCutoffCents;
             
-            // Set up the releaseVolumeEnvelope generator
-            const releaseVolumeEnvelope = this.audioContext.createGain(); // 2/max/speakers
-            initialFilterCutoff.connect(releaseVolumeEnvelope, 0, 0);
-            releaseVolumeEnvelope.channelCount = 1;
-            releaseVolumeEnvelope.channelCountMode = "explicit";
-            releaseVolumeEnvelope.channelInterpretation = "discrete";
-            releaseVolumeEnvelope.gain.value = 1;
-            releaseHelper.addNode(releaseVolumeEnvelope, buffers[i].releaseVolumeEnvelope);
+            // Set up the DAHSDR envelope generators
+            const envelopeGain = this.audioContext.createGain(); // 2/max/speakers
+            initialFilterCutoff.connect(envelopeGain, 0, 0);
+            envelopeGain.channelCount = 1;
+            envelopeGain.channelCountMode = "explicit";
+            envelopeGain.channelInterpretation = "discrete";
+            envelopeGain.gain.value = 0;
+            const envelopeValues = [
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DelayVolumeEnvelope, options, buffers[i].delayVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.AttackVolumeEnvelope, options, buffers[i].attackVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.HoldVolumeEnvelope, options, buffers[i].holdVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DecayVolumeEnvelope, options, buffers[i].decayVolumeEnvelope)),
+                Player.getModulatedValue(bufferModulators, GeneratorOperations.SustainVolumeEnvelope, options, buffers[i].sustainVolumeEnvelope),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.ReleaseVolumeEnvelope, options, buffers[i].releaseVolumeEnvelope)),
+            ];
+            envelopeHelper.addNode(envelopeGain, envelopeValues);
             
             // Set up the pan generator
             const gainNodeL = this.audioContext.createGain(); // 2/max/speakers
-            releaseVolumeEnvelope.connect(gainNodeL, 0, 0);
+            envelopeGain.connect(gainNodeL, 0, 0);
             gainNodeL.channelCount = 1;
             gainNodeL.channelCountMode = "explicit";
             gainNodeL.channelInterpretation = "discrete";
-            gainNodeL.gain.value = .5 - (buffers[i].pan || 0);
+            gainNodeL.gain.value = .5 - (buffers[i].pan !== null ? buffers[i].pan / 1000 : 0);
             const gainNodeR = this.audioContext.createGain(); // 2/max/speakers
-            releaseVolumeEnvelope.connect(gainNodeR, 0, 0);
+            envelopeGain.connect(gainNodeR, 0, 0);
             gainNodeR.channelCount = 1;
             gainNodeR.channelCountMode = "explicit";
             gainNodeR.channelInterpretation = "discrete";
-            gainNodeR.gain.value = .5 + (buffers[i].pan || 0);
+            gainNodeR.gain.value = .5 + (buffers[i].pan !== null ? buffers[i].pan / 1000 : 0);
             // Attach our sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
             gainNodesL.push(gainNodeL);
             gainNodesR.push(gainNodeR);
@@ -302,7 +393,7 @@ export class Player {
         masterGain.connect(this.audioContext.destination);
         source.start();
         const noteId = this.nextNoteID++;
-        return { source: source, asdrNode: releaseHelper, noteId: noteId };
+        return { source: source, envelopeHelper: envelopeHelper, noteId: noteId };
     }
 
     dispose() {

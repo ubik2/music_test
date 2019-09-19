@@ -65,7 +65,7 @@ export class Schedule {
     }
 
     addRelative(time, func) {
-        return this.add(this.timeSinceStart + time, func);
+        return this.add(this.timeSinceStart/1000 + time, func)
     }
 
     /**

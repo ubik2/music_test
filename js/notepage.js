@@ -140,6 +140,7 @@ export class NotePage {
             const keyValue = Vex.Flow.keyProperties(key).int_value;
             const matchingNoteEntries = this.activeNotes.filter((value, index, array) => value[1] == keyValue);
             matchingNoteEntries.forEach((value, index, array) => this.player.triggerRelease(value[0]));
+            this.activeNotes = this.activeNotes.filter((value, index, array) => value[1] != keyValue);
         });
         if (this.renderer !== null) {
             note.setStyle(this.noteDefaultStyle);
