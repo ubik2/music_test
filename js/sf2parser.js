@@ -167,22 +167,6 @@ export class ModulatorHelper {
     static getPolarity(operator) {
         return (operator & 0x0200) ? ModulatorPolarities.Bipolar : ModulatorPolarities.Unipolar;
     }
-    
-    /**
-     * Returns a function that maps from [0,1] to [-1,1]
-     * @param {*} operator 
-     */
-    static getPolarityFunction(operator) {
-        const polarity = ModulatorHelper.getPolarity(operator);
-        switch (polarity) {
-            case ModulatorPolarities.Unipolar: 
-                return x => x;
-            case ModulatorPolarities.Bipolar: 
-                return x => 2 * x - 1; // FIXME: this is broken
-            default:
-                return undefined;
-        }
-    }
 
     static getDirection(operator) {
         return (operator & 0x0100) ? ModulatorDirections.MaxToMin : ModulatorDirections.MinToMax;
@@ -205,20 +189,33 @@ export class ModulatorHelper {
     }
 
     /**
-     * Returns a function that maps an input value from [0,127] to an output value from [0,1]
+     * Returns a function that maps an input value from [0,127] to an output value from [-1,1]
      * @param {*} operator 
      */
-    static getSourceTypeFunction(operator) {
+    static getPolaritySourceTypeFunction(operator) {
+        const polarity = ModulatorHelper.getPolarity(operator);
         const sourceType = ModulatorHelper.getSourceType(operator);
         switch (sourceType) {
             case ModulatorSourceTypes.Linear:
-                return x => x / 127;
+                return (polarity === ModulatorPolarities.Unipolar) ?
+                    x => x / 127 :
+                    x => (2 * x) / 127 - 1;
             case ModulatorSourceTypes.Concave:
-                return x => ModulatorHelper.sourceTypeTable.concave[Math.trunc(x)];
+                return (polarity === ModulatorPolarities.Unipolar) ?
+                    x => ModulatorHelper.sourceTypeTable.concave[Math.trunc(x)] :
+                    x => (x >= 64) ? 
+                        ModulatorHelper.sourceTypeTable.concave[Math.trunc(2 * x - 127)] :
+                        -ModulatorHelper.sourceTypeTable.concave[Math.trunc(127 - 2 * x)];
             case ModulatorSourceTypes.Convex:
-                return x => ModulatorHelper.sourceTypeTable.convex[Math.trunc(x)];
+                return (polarity === ModulatorPolarities.Unipolar) ?
+                    x => ModulatorHelper.sourceTypeTable.convex[Math.trunc(x)] :
+                    x => (x >= 64) ? 
+                        ModulatorHelper.sourceTypeTable.convex[Math.trunc(2 * x - 127)] :
+                        -ModulatorHelper.sourceTypeTable.convex[Math.trunc(127 - 2 * x)];
             case ModulatorSourceTypes.Switch:
-                return x => x >= 64 ? 1 : 0;
+                return (polarity === ModulatorPolarities.Unipolar) ?
+                    x => x >= 64 ? 1 : 0 :
+                    x => x >= 64 ? 1 : -1;
             default:
                 return undefined;
         }
@@ -241,9 +238,8 @@ export class ModulatorHelper {
 
     static getCompoundFunction(operator) {
         const directionFunction = ModulatorHelper.getDirectionFunction(operator);
-        const sourceTypeFunction = ModulatorHelper.getSourceTypeFunction(operator);
-        const polarityFunction = ModulatorHelper.getPolarityFunction(operator);
-        return x => polarityFunction(sourceTypeFunction(directionFunction(x)));
+        const polaritySourceTypeFunction = ModulatorHelper.getPolaritySourceTypeFunction(operator);
+        return x => polaritySourceTypeFunction(directionFunction(x));
     }
 
     static getModulatorFunction(modulatorEntry) {
