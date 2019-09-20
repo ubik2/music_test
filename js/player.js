@@ -340,8 +340,7 @@ export class Player {
             initialAttenuation.channelCount = 1;
             initialAttenuation.channelCountMode = "explicit";
             initialAttenuation.channelInterpretation = "discrete";
-            initialAttenuation.gain.value = Player.addCentibels(1, -generatorValues.initialAttenuation);
-            const initialAttenuationCentibels = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialAttenuation, options, 0);
+            const initialAttenuationCentibels = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialAttenuation, options, generatorValues.initialAttenuation);
             initialAttenuation.gain.value = Player.addCentibels(initialAttenuation.gain.value, -initialAttenuationCentibels);
 
             // Set up the initial filter cutoff modulator/generator
@@ -351,10 +350,10 @@ export class Player {
             initialFilterCutoff.channelCountMode = "explicit";
             initialFilterCutoff.channelInterpretation = "discrete";
             initialFilterCutoff.type = "lowpass";
-            initialFilterCutoff.Q.value = Player.centibelsToAmplitude(generatorValues.initialFilterQ);
-            initialFilterCutoff.detune.value = generatorValues.initialFilterCutoff;
             initialFilterCutoff.frequency.value = GeneratorHelper.BaseFrequency;
-            const initialFilterCutoffCents = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialFilterCutoff, options, initialFilterCutoff.detune.value);;
+            const initialFilterQCentibels = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialFilterQ, options, generatorValues.initialFilterQ);
+            initialFilterCutoff.Q.value = Player.centibelsToAmplitude(initialFilterQCentibels);
+            const initialFilterCutoffCents = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialFilterCutoff, options, generatorValues.initialFilterCutoff);
             initialFilterCutoff.detune.value = initialFilterCutoffCents;
             
             // Set up the DAHSDR envelope generators
@@ -375,18 +374,19 @@ export class Player {
             envelopeHelper.addNode(envelopeGain, envelopeValues);
             
             // Set up the pan generator
+            const panMillis = Player.getModulatedValue(bufferModulators, GeneratorOperations.Pan, options, generatorValues.pan);
             const gainNodeL = this.audioContext.createGain(); // 2/max/speakers
             envelopeGain.connect(gainNodeL, 0, 0);
             gainNodeL.channelCount = 1;
             gainNodeL.channelCountMode = "explicit";
             gainNodeL.channelInterpretation = "discrete";
-            gainNodeL.gain.value = .5 - (generatorValues.pan !== null ? generatorValues.pan / 1000 : 0);
+            gainNodeL.gain.value = .5 - panMillis / 1000;
             const gainNodeR = this.audioContext.createGain(); // 2/max/speakers
             envelopeGain.connect(gainNodeR, 0, 0);
             gainNodeR.channelCount = 1;
             gainNodeR.channelCountMode = "explicit";
             gainNodeR.channelInterpretation = "discrete";
-            gainNodeR.gain.value = .5 + (generatorValues.pan !== null ? generatorValues.pan / 1000 : 0);
+            gainNodeR.gain.value = .5 + panMillis / 1000;
             // Attach our sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
             gainNodesL.push(gainNodeL);
             gainNodesR.push(gainNodeR);
