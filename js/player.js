@@ -73,6 +73,72 @@ class EnvelopeHelper {
     }
 }
 
+class GeneratorValues {
+    constructor(object = null) {
+        this.initialFilterCutoff = null;
+        this.initialFilterQ = null;
+        this.pan = null;
+        this.delayVolumeEnvelope = null;
+        this.attackVolumeEnvelope = null;
+        this.holdVolumeEnvelope = null;
+        this.decayVolumeEnvelope = null;
+        this.sustainVolumeEnvelope = null;
+        this.releaseVolumeEnvelope = null;
+        this.initialAttenuation = null;
+        this.fineTune = null;
+        if (object !== null) {
+            this.merge(object);
+        }
+    }
+
+    static getDefaults() {
+        return new GeneratorValues({
+            initialFilterCutoff: 13500, // default of 13500 cents
+            initialFilterQ: 0, // default of 0cB
+            pan: 0, // default of 0 tenths of a percent
+            delayVolumeEnvelope: -12000, // -12000 timecents
+            attackVolumeEnvelope: -12000, // -12000 timecents
+            holdVolumeEnvelope: -12000, // -12000 timecents
+            decayVolumeEnvelope: -12000, // -12000 timecents
+            sustainVolumeEnvelope: 0, // default of 0cB
+            releaseVolumeEnvelope: -12000, // -12000 timecents
+            initialAttenuation: 0, // default of 0cB
+            fineTune: 0 // default of 0 cents
+        });
+    }
+
+    static fromGenerators(generators) {
+        return new GeneratorValues({
+            initialFilterCutoff: GeneratorHelper.getProperty(generators, GeneratorOperations.InitialFilterCutoff),
+            initialFilterQ: GeneratorHelper.getProperty(generators, GeneratorOperations.InitialFilterQ),
+            pan: GeneratorHelper.getInt16Property(generators, GeneratorOperations.Pan),
+            delayVolumeEnvelope: GeneratorHelper.getInt16Property(generators, GeneratorOperations.DelayVolumeEnvelope),
+            attackVolumeEnvelope: GeneratorHelper.getInt16Property(generators, GeneratorOperations.AttackVolumeEnvelope),
+            holdVolumeEnvelope: GeneratorHelper.getInt16Property(generators, GeneratorOperations.HoldVolumeEnvelope),
+            decayVolumeEnvelope: GeneratorHelper.getInt16Property(generators, GeneratorOperations.DecayVolumeEnvelope),
+            sustainVolumeEnvelope: GeneratorHelper.getProperty(generators, GeneratorOperations.SustainVolumeEnvelope),
+            releaseVolumeEnvelope: GeneratorHelper.getInt16Property(generators, GeneratorOperations.ReleaseVolumeEnvelope),
+            initialAttenuation: GeneratorHelper.getProperty(generators, GeneratorOperations.InitialAttenuation),
+            fineTune: GeneratorHelper.getInt16Property(generators, GeneratorOperations.FineTune)
+        });
+    }
+
+    merge(other) {
+        this.initialFilterCutoff = (this.initialFilterCutoff !== null) ? this.initialFilterCutoff : other.initialFilterCutoff;
+        this.initialFilterQ = (this.initialFilterQ !== null) ? this.initialFilterQ : other.initialFilterQ;
+        this.pan = (this.pan !== null) ? this.pan : other.pan;
+        this.delayVolumeEnvelope = (this.delayVolumeEnvelope !== null) ? this.delayVolumeEnvelope : other.delayVolumeEnvelope;
+        this.attackVolumeEnvelope = (this.attackVolumeEnvelope !== null) ? this.attackVolumeEnvelope : other.attackVolumeEnvelope;
+        this.holdVolumeEnvelope = (this.holdVolumeEnvelope !== null) ? this.holdVolumeEnvelope : other.holdVolumeEnvelope;
+        this.decayVolumeEnvelope = (this.decayVolumeEnvelope !== null) ? this.decayVolumeEnvelope : other.decayVolumeEnvelope;
+        this.sustainVolumeEnvelope = (this.sustainVolumeEnvelope !== null) ? this.sustainVolumeEnvelope : other.sustainVolumeEnvelope;
+        this.releaseVolumeEnvelope = (this.releaseVolumeEnvelope !== null) ? this.releaseVolumeEnvelope : other.releaseVolumeEnvelope;
+        this.initialAttenuation = (this.initialAttenuation !== null) ? this.initialAttenuation : other.initialAttenuation;
+        this.fineTune = (this.fineTune !== null) ? this.fineTune : other.fineTune;
+        return this;
+    }
+}
+
 export class Player {
     constructor(parser, url, callback = null) {
         this.chunk = null;
@@ -107,62 +173,23 @@ export class Player {
                 }
                 const samplesChunk = pdtaChunk.getChunk('shdr');
                 const buffers = [];
-                const global = {
-                    initialFilterCutoff: 13500, // default of 13500 cents
-                    initialFilterQ: 0, // default of 0cB
-                    pan: 0, // default of 0 tenths of a percent
-                    delayVolumeEnvelope: -12000, // -12000 timecents
-                    attackVolumeEnvelope: -12000, // -12000 timecents
-                    holdVolumeEnvelope: -12000, // -12000 timecents
-                    decayVolumeEnvelope: -12000, // -12000 timecents
-                    sustainVolumeEnvelope: 0, // default of 0cB
-                    releaseVolumeEnvelope: -12000, // -12000 timecents
-                    initialAttenuation: 0, // default of 0cB
-                    fineTune: 0 // default of 0 cents
+                const global = { 
+                    generatorValues: GeneratorValues.getDefaults(),
+                    modulators: null 
                 };
                 for (let bagEntry of instrument.instrumentBags) {
                     let sampleID = GeneratorHelper.getSampleID(bagEntry.generators);
-                    let initialFilterCutoff = GeneratorHelper.getProperty(bagEntry.generators, GeneratorOperations.InitialFilterCutoff);
-                    let initialFilterQ = GeneratorHelper.getProperty(bagEntry.generators, GeneratorOperations.InitialFilterQ);
-                    let pan = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.Pan);
-                    let delayVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.DelayVolumeEnvelope);
-                    let attackVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.AttackVolumeEnvelope);
-                    let holdVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.HoldVolumeEnvelope);
-                    let decayVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.DecayVolumeEnvelope);
-                    let sustainVolumeEnvelope = GeneratorHelper.getProperty(bagEntry.generators, GeneratorOperations.SustainVolumeEnvelope);
-                    let releaseVolumeEnvelope = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.ReleaseVolumeEnvelope);
-                    let initialAttenuation = GeneratorHelper.getProperty(bagEntry.generators, GeneratorOperations.InitialAttenuation);
-                    let fineTune = GeneratorHelper.getInt16Property(bagEntry.generators, GeneratorOperations.FineTune);
+                    let generatorValues = GeneratorValues.fromGenerators(bagEntry.generators);
                     if (sampleID !== null) {
                         buffers.push({
-                            initialFilterCutoff: Player.firstNonNull(initialFilterCutoff, global.initialFilterCutoff),
-                            initialFilterQ: Player.firstNonNull(initialFilterQ, global.initialFilterQ),
-                            pan: Player.firstNonNull(pan, global.pan),
-                            delayVolumeEnvelope: Player.firstNonNull(delayVolumeEnvelope, global.delayVolumeEnvelope),
-                            attackVolumeEnvelope: Player.firstNonNull(attackVolumeEnvelope, global.attackVolumeEnvelope),
-                            holdVolumeEnvelope: Player.firstNonNull(holdVolumeEnvelope, global.holdVolumeEnvelope),
-                            decayVolumeEnvelope: Player.firstNonNull(decayVolumeEnvelope, global.decayVolumeEnvelope),
-                            sustainVolumeEnvelope: Player.firstNonNull(sustainVolumeEnvelope, global.sustainVolumeEnvelope),
-                            releaseVolumeEnvelope: Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope),
-                            initialAttenuation: Player.firstNonNull(initialAttenuation, global.initialAttenuation),
-                            fineTune: Player.firstNonNull(fineTune, global.fineTune),
+                            generatorValues: generatorValues.merge(global.generatorValues),
                             buffer: Float32Array.from(samplesChunk.samples[sampleID].sampleBuffer, val => val / 32768),
                             // For now, I'm dropping the SF2 modulators in directly. These should really be a backend agnostic class.
                             modulators: bagEntry.modulators
                         });
                     } else if (bagEntry === instrument.instrumentBags[0]) {
-                        // If the first record has no sample, it's a global set of properties
-                        global.initialFilterCutoff = Player.firstNonNull(initialFilterCutoff, global.initialFilterCutoff);
-                        global.initialFilterQ = Player.firstNonNull(initialFilterQ, global.initialFilterQ);
-                        global.pan = Player.firstNonNull(pan, global.pan);
-                        global.delayVolumeEnvelope = Player.firstNonNull(delayVolumeEnvelope, global.decayVolumeEnvelope);
-                        global.attackVolumeEnvelope = Player.firstNonNull(attackVolumeEnvelope, global.attackVolumeEnvelope);
-                        global.holdVolumeEnvelope = Player.firstNonNull(holdVolumeEnvelope, global.holdVolumeEnvelope);
-                        global.decayVolumeEnvelope = Player.firstNonNull(decayVolumeEnvelope, global.decayVolumeEnvelope);
-                        global.sustainVolumeEnvelope = Player.firstNonNull(sustainVolumeEnvelope, global.sustainVolumeEnvelope);
-                        global.releaseVolumeEnvelope = Player.firstNonNull(releaseVolumeEnvelope, global.releaseVolumeEnvelope);
-                        global.initialAttenuation = Player.firstNonNull(initialAttenuation, global.initialAttenuation);
-                        global.fineTune = Player.firstNonNull(fineTune, global.fineTune);
+                        // If the first record has no sample, it's a global set of properties, which will replace our defaults
+                        global.generatorValues = generatorValues.merge(global.generatorValues);
                         global.modulators = bagEntry.modulators;
                     }
                 }
@@ -174,15 +201,6 @@ export class Player {
                 }
             })
         });
-    }
-
-    static firstNonNull(...args) {
-        for (let arg of args) {
-            if (arg != null) {
-                return arg;
-            }
-        }
-        return null;
     }
 
     triggerAttack(keyNumber) {
@@ -306,6 +324,7 @@ export class Player {
         const envelopeHelper = new EnvelopeHelper();
         for (let i = 0; i < buffers.length; i++) {
             const bufferModulators = Player.getMergedModulators(globalModulators, buffers[i].modulators);
+            const generatorValues = buffers[i].generatorValues;
             // Populate our audio buffer
             const float32Array = buffers[i].buffer;
             if (audioBuffer.copyToChannel) {
@@ -321,7 +340,7 @@ export class Player {
             initialAttenuation.channelCount = 1;
             initialAttenuation.channelCountMode = "explicit";
             initialAttenuation.channelInterpretation = "discrete";
-            initialAttenuation.gain.value = Player.addCentibels(1, -buffers[i].initialAttenuation);
+            initialAttenuation.gain.value = Player.addCentibels(1, -generatorValues.initialAttenuation);
             const initialAttenuationCentibels = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialAttenuation, options, 0);
             initialAttenuation.gain.value = Player.addCentibels(initialAttenuation.gain.value, -initialAttenuationCentibels);
 
@@ -332,8 +351,8 @@ export class Player {
             initialFilterCutoff.channelCountMode = "explicit";
             initialFilterCutoff.channelInterpretation = "discrete";
             initialFilterCutoff.type = "lowpass";
-            initialFilterCutoff.Q.value = Player.centibelsToAmplitude(buffers[i].initialFilterQ);
-            initialFilterCutoff.detune.value = buffers[i].initialFilterCutoff;
+            initialFilterCutoff.Q.value = Player.centibelsToAmplitude(generatorValues.initialFilterQ);
+            initialFilterCutoff.detune.value = generatorValues.initialFilterCutoff;
             initialFilterCutoff.frequency.value = GeneratorHelper.BaseFrequency;
             const initialFilterCutoffCents = Player.getModulatedValue(bufferModulators, GeneratorOperations.InitialFilterCutoff, options, initialFilterCutoff.detune.value);;
             initialFilterCutoff.detune.value = initialFilterCutoffCents;
@@ -346,12 +365,12 @@ export class Player {
             envelopeGain.channelInterpretation = "discrete";
             envelopeGain.gain.value = 0;
             const envelopeValues = [
-                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DelayVolumeEnvelope, options, buffers[i].delayVolumeEnvelope)),
-                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.AttackVolumeEnvelope, options, buffers[i].attackVolumeEnvelope)),
-                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.HoldVolumeEnvelope, options, buffers[i].holdVolumeEnvelope)),
-                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DecayVolumeEnvelope, options, buffers[i].decayVolumeEnvelope)),
-                Player.getModulatedValue(bufferModulators, GeneratorOperations.SustainVolumeEnvelope, options, buffers[i].sustainVolumeEnvelope),
-                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.ReleaseVolumeEnvelope, options, buffers[i].releaseVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DelayVolumeEnvelope, options, generatorValues.delayVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.AttackVolumeEnvelope, options, generatorValues.attackVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.HoldVolumeEnvelope, options, generatorValues.holdVolumeEnvelope)),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.DecayVolumeEnvelope, options, generatorValues.decayVolumeEnvelope)),
+                Player.getModulatedValue(bufferModulators, GeneratorOperations.SustainVolumeEnvelope, options, generatorValues.sustainVolumeEnvelope),
+                ModulatorHelper.getLogProperty(Player.getModulatedValue(bufferModulators, GeneratorOperations.ReleaseVolumeEnvelope, options, generatorValues.releaseVolumeEnvelope)),
             ];
             envelopeHelper.addNode(envelopeGain, envelopeValues);
             
@@ -361,13 +380,13 @@ export class Player {
             gainNodeL.channelCount = 1;
             gainNodeL.channelCountMode = "explicit";
             gainNodeL.channelInterpretation = "discrete";
-            gainNodeL.gain.value = .5 - (buffers[i].pan !== null ? buffers[i].pan / 1000 : 0);
+            gainNodeL.gain.value = .5 - (generatorValues.pan !== null ? generatorValues.pan / 1000 : 0);
             const gainNodeR = this.audioContext.createGain(); // 2/max/speakers
             envelopeGain.connect(gainNodeR, 0, 0);
             gainNodeR.channelCount = 1;
             gainNodeR.channelCountMode = "explicit";
             gainNodeR.channelInterpretation = "discrete";
-            gainNodeR.gain.value = .5 + (buffers[i].pan !== null ? buffers[i].pan / 1000 : 0);
+            gainNodeR.gain.value = .5 + (generatorValues.pan !== null ? generatorValues.pan / 1000 : 0);
             // Attach our sound from the buffer to each side, with a gain node to control how much of the sound should go to each side
             gainNodesL.push(gainNodeL);
             gainNodesR.push(gainNodeR);
@@ -375,9 +394,9 @@ export class Player {
         // Set up the fineTune generator, combined with the pitch shift to play the correct key
         // It should be possible to override this on the buffer level instead, but our sound font doesn't do this, so I didn't add support
         if (source.detune) {
-            source.detune.value = (buffers[0].fineTune || 0) + 100 * pitchShift;
+            source.detune.value = (global.generatorValues.fineTune || 0) + 100 * pitchShift;
         } else { // Workaround for Safari
-            const detuneValue = (buffers[0].fineTune || 0) + 100 * pitchShift;
+            const detuneValue = (global.generatorValues.fineTune || 0) + 100 * pitchShift;
             source.playbackRate.value = Math.pow(2, detuneValue / 1200);
         }
         // Each buffer has been split with a gain node for each channel. Bring together all the channels for each side.
