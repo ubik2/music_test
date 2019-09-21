@@ -124,8 +124,7 @@ export class Persistence {
         }
         const deck = Object.assign({}, injectedDeck);
         // These are temporal attributes that should not be persisted
-        delete deck.dayCutoff;
-        delete deck.today;
+        delete deck.scheduler;
         // These are injected attributes that should not be persisted
         delete deck.logger;
         delete deck.dateUtil;
@@ -139,8 +138,8 @@ export class Persistence {
         }
         const deck = new Deck(undefined, undefined);
         const rv = Object.assign(deck, uninjectedDeck, { logger: this.logger, random: this.random, dateUtil: this.dateUtil });
-        rv.dayCutoff = deck.dayCutoffInternal();
-        rv.today = deck.daysSinceCreation();
+        rv.dayCutoff = deck.scheduler._dayCutoff;
+        rv.today = deck.scheduler.daysSinceCreation;
         return rv;
     }
 

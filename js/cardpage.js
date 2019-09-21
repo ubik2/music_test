@@ -1,7 +1,8 @@
 ﻿import { MusicCard } from "./musiccard";
-import { Deck, Ease } from "./deck";
+import { Deck } from "./deck";
 import { Persistence } from "./persistence";
 import { NotePage} from "./notepage";
+import { Ease } from "./base_scheduler";
 
 import Vex from "../node_modules/vexflow/src/index";
 
@@ -87,7 +88,7 @@ export class CardPage extends NotePage {
      * @return {Card} the next card in the deck or null if we are done for the day
      */
     getCard() {
-        const card = this.currentDeck.getCard();
+        const card = this.currentDeck.scheduler.getCard();
         if (card === null) {
             this.message('Done for the day');
         } else {
@@ -104,7 +105,7 @@ export class CardPage extends NotePage {
      * @return {Card} the next card in the deck
      */
     nextCard(ease) {
-        this.currentDeck.answerCard(this.currentCard, ease);
+        this.currentDeck.scheduler.answerCard(this.currentCard, ease);
         this.persistence.saveDeck(this.currentDeck); // we don't bother with a callback, since we don't care
         return this.getCard();
     }

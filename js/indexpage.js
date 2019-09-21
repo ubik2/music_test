@@ -1,5 +1,5 @@
 ﻿import { MusicCard } from "./musiccard";
-import { Deck, Ease } from "./deck";
+import { Deck } from "./deck";
 import { Persistence } from "./persistence";
 import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
 import { Config } from "./config";
@@ -327,9 +327,9 @@ export class IndexPage {
         this.addRowForDeck();
 
         // A freshly loaded deck doesn't have valid counts yet. Reset them
-        loadedDeck.resetNewCount();
-        loadedDeck.resetLearnCount();
-        loadedDeck.resetReviewCount();
+        loadedDeck.scheduler.resetNewCount();
+        loadedDeck.scheduler.resetLearnCount();
+        loadedDeck.scheduler.resetReviewCount();
         this.refreshRowForDeck(loadedDeck);
 
         this.decks.push(loadedDeck);
