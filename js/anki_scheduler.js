@@ -1,6 +1,6 @@
 import { Queue, CardType } from "./card";
 import { Deck } from "./deck";
-import { Ease, NewSpread, BaseScheduler } from "./base_scheduler";
+import { Ease, NewSpread, LeechAction, BaseScheduler } from "./base_scheduler";
 
 export class AnkiScheduler extends BaseScheduler {
     constructor(deck) {
@@ -20,7 +20,6 @@ export class AnkiScheduler extends BaseScheduler {
         this.reviewCount = 0;
         this.learnCount = 0;
         this.newCardModulus = 0;
-        this.learnCutoff = 0;
     }
 
     // Most of this is from the Anki scheduling
@@ -65,15 +64,8 @@ export class AnkiScheduler extends BaseScheduler {
         return this.getLearnCard(true);
     }
 
-    resetNewCount() {
-        const limit = this.deckNewLimit;
-        const newCount = this.deck.cards.reduce((n, card) => n + (card.cardType === CardType.NEW), 0);
-        this.newCount = Math.min(limit, newCount);
-    }
-
     resetNew() {
-        this.resetNewCount();
-        this.newQueue.splice(0);
+        super.resetNew();
         this.updateNewCardRatio();
     }
 
@@ -87,7 +79,7 @@ export class AnkiScheduler extends BaseScheduler {
         this.newQueue.splice(0);
         const limit = Math.min(this.queueLimit, this.deckNewLimit);
         if (limit > 0) {
-            let newCards = this.deck.cards.filter(card => card.cardType === CardType.NEW);
+            let newCards = this._newCards;
             newCards = Deck.stableSort(newCards, (card1, card2) => card1.due - card2.due);
             this.newQueue = newCards;
             this.newQueue.splice(limit);
@@ -155,20 +147,9 @@ export class AnkiScheduler extends BaseScheduler {
         }
     }
 
-    resetLearnCount() {
-        // sub-day
-        this.learnCount = this.deck.cards.reduce((n, card) => n + (card.queue === Queue.LEARN && card.due < this.learnCutoff), 0);
-        // day
-        this.learnCount += this.deck.cards.reduce((n, card) => n + (card.queue === Queue.LEARN_DAY && card.due <= this.today), 0);
-        // previews
-        this.learnCount += this.deck.cards.reduce((n, card) => n + (card.queue === Queue.PREVIEW), 0);
-    }
-
     resetLearn() {
         this.updateLearnCutoff(true);
-        this.resetLearnCount();
-        this.learnQueue.splice(0);
-        this.learnDayQueue.splice(0);
+        super.resetLearn();
     }
 
     fillLearn() {
@@ -206,7 +187,7 @@ export class AnkiScheduler extends BaseScheduler {
         if (this.learnDayQueue.length !== 0) {
             return true;
         }
-        this.learnDayQueue = this.deck.cards.filter(card => card.queue === Queue.LEARN_DAY && card.due <= this.today);
+        this.learnDayQueue = this._learnDayCards;
         this.learnDayQueue.splice(this.queueLimit);
         this.learnDayQueue = this.deck.shuffledCards(this.learnDayQueue);
         return this.learnDayQueue.length > 0;
@@ -290,22 +271,6 @@ export class AnkiScheduler extends BaseScheduler {
         // TODO: ODue handling
     }
 
-    currentReviewLimit() {
-        return this.reviewConfig().perDay;
-    }
-
-    resetReviewCount() {
-        const limit = this.currentReviewLimit();
-        const reviewCount = this.deck.cards.reduce((n, card) => n + (card.queue === Queue.REVIEW && card.due <= this.today), 0);
-        this.reviewCount = Math.min(reviewCount, limit);
-    }
-
-    resetReview() {
-        this.resetReviewCount();
-        this.reviewQueue.splice(0);
-    }
-
-
     fillReview() {
         if (this.reviewQueue.length !== 0) {
             return true;
@@ -313,11 +278,11 @@ export class AnkiScheduler extends BaseScheduler {
         if (this.reviewCount === 0) {
             return false;
         }
-        const limit = Math.min(this.queueLimit, this.currentReviewLimit());
+        const limit = Math.min(this.queueLimit, this.reviewConfig.perDay);
         if (limit !== 0) {
             this.reviewQueue.splice(0);
             // fill the queue
-            let reviewCards = this.deck.cards.filter(card => card.queue === Queue.REVIEW && card.due <= this.today);
+            let reviewCards = this._reviewCards;
             reviewCards = Deck.stableSort(reviewCards, (card1, card2) => card1.due - card2.due);
             this.reviewQueue = reviewCards;
             this.reviewQueue.splice(limit);
@@ -355,7 +320,7 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     rescheduleLapse(card) {
-        const conf = this.lapseConfig(card);
+        const conf = this.lapseConfig;
         card.lapses = card.lapses + 1;
         card.factor = Math.max(1300, card.factor - 200);
         let delay;
@@ -407,7 +372,7 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     answerLearnCard(card, ease) {
-        const conf = this.learnConfig(card);
+        const conf = (card.cardType === CardType.REVIEW || card.cardType === CardType.RELEARN) ? this.lapseConfig : this.newConfig;
         let type;
         if (card.cardType === CardType.REVIEW || card.cardType === CardType.RELEARN) {
             type = CardType.REVIEW;
@@ -502,12 +467,7 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     startingLeft(card) {
-        let conf;
-        if (card.cardType === CardType.RELEARN) {
-            conf = this.lapseConfig(card);
-        } else {
-            conf = this.learnConfig(card);
-        }
+        const conf = (card.cardType === CardType.REVIEW || card.cardType === CardType.RELEARN) ? this.lapseConfig : this.newConfig;
         const total = conf.delays.length;
         const today = this.leftToday(conf.delays, total);
         return total + today * 1000;
@@ -598,7 +558,7 @@ export class AnkiScheduler extends BaseScheduler {
             return this.nextLearnInterval(card, ease);
         } else if (ease === Ease.FAIL) {
             // lapse
-            const conf = this.lapseConfig(card);
+            const conf = this.lapseConfig;
             if (conf.delays.length > 0) {
                 return conf.delays[0] * 60;
             }
@@ -618,7 +578,7 @@ export class AnkiScheduler extends BaseScheduler {
         if (card.queue === Queue.NEW) {
             card.left = this.startingLeft(card);
         }
-        const conf = this.learnConfig(card);
+        const conf = (card.cardType === CardType.REVIEW || card.cardType === CardType.RELEARN) ? this.lapseConfig : this.newConfig;
         if (ease === Ease.FAIL) {
             // fail
             return this.delayForGrade(conf, conf.delays.length);
@@ -639,7 +599,7 @@ export class AnkiScheduler extends BaseScheduler {
 
     nextReviewInterval(card, ease, fuzz) {
         const delay = this.daysLate(card);
-        const conf = this.reviewConfig();
+        const conf = this.reviewConfig;
         const factor = card.factor / 1000.0;
         const hardFactor = conf.hardFactor || 1.2;
         const hardMin = (hardFactor > 1) ? card.interval : 0;

@@ -1,9 +1,4 @@
-
-
-export const LeechAction = {
-    SUSPEND: 0,
-    TAG_ONLY: 1
-};
+import { LeechAction} from "./base_scheduler";
 
 let configSingleton = null;
 
@@ -43,6 +38,7 @@ export class Config {
     setConfig(inConfig) {
         this.configMap = inConfig;
     }
+
     getConfig() {
         return this.configMap;
     }

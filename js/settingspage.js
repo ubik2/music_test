@@ -23,8 +23,8 @@ export class SettingsPage {
     // save stuff function
     submitHandler() {
         let config = this.getConfig();
-        config.getConfig()["new"]["perDay"] = document.getElementById("newcards").value;
-        config.getConfig()["review"]["perDay"] = document.getElementById("reviewcards").value;
+        config.getConfig()["new"]["perDay"] = parseInt(document.getElementById("newcards").value);
+        config.getConfig()["review"]["perDay"] = parseInt(document.getElementById("reviewcards").value);
 
         const persistence = new Persistence();
         persistence.whenReady(() => {

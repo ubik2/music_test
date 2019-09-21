@@ -308,9 +308,9 @@ export class IndexPage {
     refreshRowForDeck(inDeck) {
         const idSuffix = '' + (1 + keySignatures.indexOf(inDeck.deckId));
         document.getElementById("deckScale" + idSuffix).innerText = inDeck.deckId + ' Major';
-        document.getElementById("new" + idSuffix).innerText = inDeck.newCount;
-        document.getElementById("learning" + idSuffix).innerText = inDeck.learnCount;
-        document.getElementById("review" + idSuffix).innerText = inDeck.reviewCount;
+        document.getElementById("new" + idSuffix).innerText = inDeck.scheduler.newCount;
+        document.getElementById("learning" + idSuffix).innerText = inDeck.scheduler.learnCount;
+        document.getElementById("review" + idSuffix).innerText = inDeck.scheduler.reviewCount;
         const buttonElement = document.getElementById("button" + idSuffix);
         if (this.soundFontLoaded) {
             buttonElement.disabled = false;

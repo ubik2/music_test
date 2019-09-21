@@ -136,10 +136,8 @@ export class Persistence {
         if (uninjectedDeck === undefined) {
             return undefined;
         }
-        const deck = new Deck(undefined, undefined);
-        const rv = Object.assign(deck, uninjectedDeck, { logger: this.logger, random: this.random, dateUtil: this.dateUtil });
-        rv.dayCutoff = deck.scheduler._dayCutoff;
-        rv.today = deck.scheduler.daysSinceCreation;
+        const deck = new Deck(undefined, undefined, this.logger, this.random, this.dateUtil);
+        const rv = Object.assign(deck, uninjectedDeck);
         return rv;
     }
 

@@ -94,10 +94,9 @@ export class NotePage {
         const voice = new Vex.Flow.Voice({ num_beats: this.currentNotes.length });
         if (!hideNotes) {
             voice.addTickables(this.currentNotes);
+            // important side effects
+            new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
         }
-
-        // important side effects
-        new Vex.Flow.Formatter().joinVoices([voice]).format([voice], 100);
         voice.draw(context, stave);
 
         context.closeGroup();
