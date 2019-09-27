@@ -70,6 +70,7 @@ export class IndexPage {
         document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = true;
         document.getElementById("settings").hidden = true;
+        document.getElementById("settingsButton").hidden = false;
     }
 
     showCards(deck) {
@@ -80,6 +81,7 @@ export class IndexPage {
         document.getElementById("practice").hidden = true;
         document.getElementById("cards").hidden = false;
         document.getElementById("settings").hidden = true;
+        document.getElementById("settingsButton").hidden = true;
         window.frames["cards"].src = "card.html";
         window.frames["cards"].onload = () => {
             window.frames["cards"].contentWindow.cardPage.setupCardPage(deck, this.player);
@@ -94,6 +96,7 @@ export class IndexPage {
         document.getElementById("cards").hidden = true;
         document.getElementById("practice").hidden = false;
         document.getElementById("settings").hidden = true;
+        document.getElementById("settingsButton").hidden = true;
         window.frames["practice"].src = "practice.html";
         window.frames["practice"].onload = () => {
             window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck, this.player);
@@ -107,6 +110,7 @@ export class IndexPage {
         document.getElementById("cards").hidden = true;
         document.getElementById("practice").hidden = true;
         document.getElementById("settings").hidden = false;
+        document.getElementById("settingsButton").hidden = true;
 
         window.frames["settings"].src = "settings.html";
         window.frames["settings"].onload = () => {
