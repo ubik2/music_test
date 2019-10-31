@@ -2,6 +2,7 @@ import { Card, Queue, CardType } from "./card";
 import { Logger, Random, DateUtil } from "./utils";
 import { MusicCard } from "./musiccard";
 import { Deck } from "./deck";
+import { AnkiScheduler } from "./anki_scheduler";
 
 const TransactionType = {
     READONLY: "readonly",
@@ -136,7 +137,8 @@ export class Persistence {
         if (uninjectedDeck === undefined) {
             return undefined;
         }
-        const deck = new Deck(undefined, undefined, this.logger, this.random, this.dateUtil);
+        const deck = new Deck(undefined, undefined, undefined, this.logger, this.random, this.dateUtil);
+        deck.scheduler = new AnkiScheduler(deck, this.logger, this.random, this.dateUtil);
         const rv = Object.assign(deck, uninjectedDeck);
         return rv;
     }

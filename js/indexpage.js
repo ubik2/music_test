@@ -5,6 +5,7 @@ import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
 import { Config } from "./config";
 import { Player } from "./player";
 import { SF2Parser } from './sf2parser';
+import { SuperMemoScheduler } from "./supermemo_scheduler";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
@@ -48,6 +49,7 @@ export class IndexPage {
             }
         }
         const deck = new Deck(keySignature, cards);
+        deck.scheduler = new SuperMemoScheduler(deck, deck.logger, deck.random, deck.dateUtil);
         return deck;
     }
 

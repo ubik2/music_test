@@ -12,14 +12,14 @@ export class Deck {
      * @param {Random} random the Random object used to generate random values or null for the default implementation
      * @param {DateUtil} dateUtil the DateUtil object used to fetch the current time or null for the default implementation
      */
-    constructor(deckId, cards, logger = null, random = null, dateUtil = null) {
+    constructor(deckId, cards, scheduler = null, logger = null, random = null, dateUtil = null) {
         this.deckId = deckId;
         this.cards = cards || [];
         this.logger = logger || new Logger();
         this.random = random || new Random();
         this.dateUtil = dateUtil || new DateUtil();
         this.creation = BaseScheduler.intNow(this.dateUtil); // seconds since epoch when deck was created
-        this.scheduler = new AnkiScheduler(this);
+        this.scheduler = scheduler || new AnkiScheduler(this, this.logger, this.random, this.dateUtil);
     }
 
     addCard(card) {

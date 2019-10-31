@@ -2,7 +2,7 @@
 import { Deck } from "./deck";
 import { Persistence } from "./persistence";
 import { NotePage} from "./notepage";
-import { Ease } from "./base_scheduler";
+import { Grade } from "./base_scheduler";
 
 import Vex from "../node_modules/vexflow/src/index";
 
@@ -37,10 +37,10 @@ export class CardPage extends NotePage {
             this.backCard();
             this.playNotes([this.currentNotes[1]]);
         });
-        document.getElementById("againButton").addEventListener("click", () => this.nextCard(Ease.FAIL));
-        document.getElementById("hardButton").addEventListener("click", () => this.nextCard(Ease.HARD));
-        document.getElementById("goodButton").addEventListener("click", () => this.nextCard(Ease.GOOD));
-        document.getElementById("easyButton").addEventListener("click", () => this.nextCard(Ease.EASY));
+        document.getElementById("againButton").addEventListener("click", () => this.nextCard(Grade.FAIL));
+        document.getElementById("hardButton").addEventListener("click", () => this.nextCard(Grade.PASS));
+        document.getElementById("goodButton").addEventListener("click", () => this.nextCard(Grade.GOOD));
+        document.getElementById("easyButton").addEventListener("click", () => this.nextCard(Grade.GREAT));
 
         document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
 
@@ -101,7 +101,7 @@ export class CardPage extends NotePage {
     /**
      * Score this card based on the provided ease value, and move to the next card in the deck.
      *
-     * @param {Ease} ease - how easy the card was
+     * @param {Grade} ease - how easy the card was
      * @return {Card} the next card in the deck
      */
     nextCard(ease) {
