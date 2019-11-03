@@ -1,8 +1,6 @@
-import { Card, Queue, CardType } from "./card";
 import { Logger, Random, DateUtil } from "./utils";
-import { MusicCard } from "./musiccard";
 import { Deck } from "./deck";
-import { AnkiScheduler } from "./anki_scheduler";
+import { SuperMemoScheduler } from "./supermemo_scheduler";
 
 const TransactionType = {
     READONLY: "readonly",
@@ -138,8 +136,9 @@ export class Persistence {
             return undefined;
         }
         const deck = new Deck(undefined, undefined, undefined, this.logger, this.random, this.dateUtil);
-        deck.scheduler = new AnkiScheduler(deck, this.logger, this.random, this.dateUtil);
+        deck.scheduler = new SuperMemoScheduler(deck, this.logger, this.random, this.dateUtil);
         const rv = Object.assign(deck, uninjectedDeck);
+        rv.scheduler.reset();
         return rv;
     }
 

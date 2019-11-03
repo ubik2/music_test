@@ -12,6 +12,10 @@ export class AnkiScheduler extends BaseScheduler {
         // at some point, i may want to switch it back, since i'll serialize all this
         this.haveQueues = false;
         this.newCardModulus = 0;
+
+        this._newCount = 0;
+        this._learnCount = 0;
+        this._reviewCount = 0;
     }
 
     // Most of this is from the Anki scheduling
@@ -57,15 +61,23 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     resetNew() {
+        this.resetNewCount();
         super.resetNew();
         this.updateNewCardRatio();
+    }
+
+    fillQueues() {
+        this.fillNew();
+        this.fillLearn();
+        this.fillLearnDay();
+        this.fillReview();
     }
 
     fillNew() {
         if (this.newQueue.length > 0) {
             return true;
         }
-        if (this.newCount === 0) {
+        if (this._newCount === 0) {
             return false;
         }
         this.newQueue.splice(0);
@@ -79,7 +91,7 @@ export class AnkiScheduler extends BaseScheduler {
                 return true;
             }
         }
-        if (this.newCount !== 0) {
+        if (this._newCount !== 0) {
             this.resetNew();
             return this.fillNew();
         }
@@ -88,7 +100,7 @@ export class AnkiScheduler extends BaseScheduler {
 
     getNewCard() {
         if (this.fillNew()) {
-            this.newCount -= 1;
+            this._newCount -= 1;
             return this.newQueue.shift();
         }
         return null;
@@ -96,10 +108,10 @@ export class AnkiScheduler extends BaseScheduler {
 
     updateNewCardRatio() {
         if (this.globalConfig.newSpread === NewSpread.NEW_CARDS_DISTRIBUTE) {
-            if (this.newCount !== 0) {
-                this.newCardModulus = (this.newCount + this.reviewCount) / this.newCount;
+            if (this._newCount !== 0) {
+                this.newCardModulus = (this._newCount + this._reviewCount) / this._newCount;
                 // if there are cards to review, ensure modulo >= 2
-                if (this.reviewCount !== 0) {
+                if (this._reviewCount !== 0) {
                     this.newCardModulus = Math.max(2, this.newCardModulus);
                 }
                 return;
@@ -109,7 +121,7 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     timeForNewCard() {
-        if (this.newCount === 0) {
+        if (this._newCount === 0) {
             return false;
         }
         const spread = this.globalConfig.newSpread;
@@ -141,11 +153,12 @@ export class AnkiScheduler extends BaseScheduler {
 
     resetLearn() {
         this.updateLearnCutoff(true);
+        this.resetLearnCount();
         super.resetLearn();
     }
 
     fillLearn() {
-        if (this.learnCount === 0) {
+        if (this._learnCount === 0) {
             return false;
         }
         if (this.learnQueue.length !== 0) {
@@ -158,14 +171,14 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     getLearnCard(collapse = false) {
-        this.maybeResetLearn(collapse && this.learnCount === 0);
+        this.maybeResetLearn(collapse && this._learnCount === 0);
         if (this.fillLearn()) {
             let cutoff = this.intNow();
             if (collapse) {
                 cutoff += this.globalConfig.collapseTime;
             }
             if (this.learnQueue[0].due < cutoff) {
-                this.learnCount -= 1;
+                this._learnCount -= 1;
                 return this.learnQueue.shift();
             }
         }
@@ -173,7 +186,7 @@ export class AnkiScheduler extends BaseScheduler {
     }
 
     fillLearnDay() {
-        if (this.learnCount === 0) {
+        if (this._learnCount === 0) {
             return false;
         }
         if (this.learnDayQueue.length !== 0) {
@@ -187,10 +200,15 @@ export class AnkiScheduler extends BaseScheduler {
 
     getLearnDayCard() {
         if (this.fillLearnDay()) {
-            this.learnCount -= 1;
+            this._learnCount -= 1;
             return this.learnDayQueue.shift();
         }
         return null;
+    }
+
+    resetReview() {
+        this.resetReviewCount();
+        super.resetReview();
     }
 
     updateCutoff() {
@@ -269,7 +287,7 @@ export class AnkiScheduler extends BaseScheduler {
         if (this.reviewQueue.length !== 0) {
             return true;
         }
-        if (this.reviewCount === 0) {
+        if (this._reviewCount === 0) {
             return false;
         }
         const limit = Math.min(this.queueLimit, this.reviewConfig.perDay);
@@ -285,7 +303,7 @@ export class AnkiScheduler extends BaseScheduler {
                 return true;
             }
         }
-        if (this.reviewCount > 0) {
+        if (this._reviewCount > 0) {
             this.resetReview();
             return this.fillReview();
         }
@@ -294,7 +312,7 @@ export class AnkiScheduler extends BaseScheduler {
 
     getReviewCard() {
         if (this.fillReview()) {
-            this.reviewCount -= 1;
+            this._reviewCount -= 1;
             return this.reviewQueue.shift();
         }
         return null;
@@ -442,15 +460,15 @@ export class AnkiScheduler extends BaseScheduler {
             card.due = Math.min(this.dayCutoff - 1, card.due + fuzz);
             card.queue = Queue.LEARN;
             if (card.due < (this.intNow() + this.globalConfig.collapseTime)) {
-                this.learnCount += 1;
+                this._learnCount += 1;
                 // if the queue is not empty and there's nothing else to do, make
                 // sure we don't put it at the head of the queue and end up showing
                 // it twice in a row
-                if (this.learnQueue.length !== 0 && this.reviewCount === 0 && this.newCount === 0) {
+                if (this.learnQueue.length !== 0 && this._reviewCount === 0 && this._newCount === 0) {
                     const smallestDue = this.learnQueue[0].due;
                     card.due = Math.max(card.due, smallestDue + 1);
                 }
-                this.sortIntoLearn(card.due, card);
+                BaseScheduler.sortIntoQueue(this.learnQueue, card);
             }
         } else {
             // the card is due in one or more days, so we need to use the day learn queue
@@ -585,7 +603,7 @@ export class AnkiScheduler extends BaseScheduler {
             return this.delayForRepeatingGrade(conf, card.left);
         } else if (ease === Grade.GREAT) {
             return this.graduatingInterval(card, conf, true, false) * 86400;
-        } else { // ease === Ease.GOOD
+        } else { // ease === Grade.GOOD
             const left = card.left - 1;
             if (left <= 0) {
                 // graduate
@@ -716,10 +734,17 @@ export class AnkiScheduler extends BaseScheduler {
         this.logger.log(card.id, ease, ((delay !== 0) ? (-delay) : card.interval), card.lastInterval, card.factor, /* card.timeTaken */ 0, type);
     }
 
-    // If the due date is identical, we will put our new card after
-    sortIntoLearn(due, card) {
-        let i;
-        for (i = 0; i < this.learnQueue.length && this.learnQueue[i].due <= due; i++);
-        this.learnQueue.splice(i, 0, card);
+
+    resetNewCount() {
+        this._newCount = Math.min(this._newCards.length, this.deckNewLimit - this.newToday);
     }
+
+    resetLearnCount() {
+        this._learnCount = this._learnCards.length + this._learnDayCards.length + this._previewCards.length;
+    }
+
+    resetReviewCount() {
+        this._reviewCount = Math.min(this._reviewCards.length, this.reviewLimit - this.reviewToday);
+    }
+
 }

@@ -27,9 +27,6 @@ export class BaseScheduler {
         this.logger = logger;
         this.random = random;
         this.dateUtil = dateUtil;
-        this.newCount = 0;
-        this.learnCount = 0;
-        this.reviewCount = 0;
         this.newQueue = [];
         this.learnQueue = [];
         this.learnDayQueue = [];
@@ -37,6 +34,9 @@ export class BaseScheduler {
         this.learnCutoff = null;
         this.dayCutoff = null;
         this.today = null;
+        this.newToday = 0; // how many new cards have we answered today
+        this.learnToday = 0; // how many learn cards have we answered today
+        this.reviewToday = 0; // how many review cards have we answered today
 
         this._globalConfig = {
             rollover: 4, // rollover at 4 am
@@ -95,6 +95,29 @@ export class BaseScheduler {
         return leftToday;
     }
 
+    /**
+     * 
+     * @param {Array.<Card>} cardQueue 
+     * @param {Card} card 
+     */
+    static sortIntoQueue(cardQueue, card) {
+        let i;
+        for (i = 0; i < cardQueue.length && cardQueue[i].due <= card.due; i++);
+        cardQueue.splice(i, 0, card);
+    }
+
+    /**
+     * 
+     * @param {Array.<Card>} cardQueue 
+     * @param {Card} card 
+     */
+    static removeFromQueue(cardQueue, card) {
+        let i = cardQueue.indexOf(card);
+        if (i >= 0) {
+            cardQueue.splice(i, 1);
+        }
+    }
+    
     /**
      * Get the configuration parameter that limits the number of new cards per day
      *
@@ -206,7 +229,7 @@ export class BaseScheduler {
             card.leftToday = BaseScheduler.leftToday(this.newConfig.delays, card.left, this.intNow(), this.dayCutoff);
         }
 
-        //throw Error("Not implemented");
+        throw Error("Not implemented");
         // if it was easy, move to review
         // if it was good, decrement left - if left is 0, move to review
         // if it was hard, repeat the card
@@ -226,16 +249,32 @@ export class BaseScheduler {
         throw Error("Not implemented");
     }
 
-    resetNewCount() {
-        this.newCount = Math.min(this._newCards.length, this.deckNewLimit);
+    getCardQueue(queue) {
+        let cardQueue = undefined;
+        if (queue === Queue.NEW) {
+            cardQueue = this.newQueue;
+        } else if (queue === Queue.LEARN) {
+            cardQueue = this.learnQueue;
+        } else if (queue === Queue.REVIEW) {
+            cardQueue = this.reviewQueue;
+        }
+        return cardQueue;
     }
 
-    resetLearnCount() {
-        this.learnCount = this._learnCards.length + this._learnDayCards.length + this._previewCards.length;
+    fillQueues() {
+        console.log("Called BaseScheduler.fillQueues");
     }
 
-    resetReviewCount() {
-        this.reviewCount = Math.min(this._reviewCards.length, this.reviewLimit);
+    get newCount() {
+        return this.newQueue.length;
+    }
+
+    get learnCount() {
+        return this.learnQueue.length;
+    }
+
+    get reviewCount() {
+        return this.reviewQueue.length;
     }
 
     get _newCards() {
@@ -261,7 +300,12 @@ export class BaseScheduler {
     updateCutoffs() {
         this.updateLearnCutoff();
         this.updateDayCutoff();
-        this.today = this.daysSinceCreation;    
+        if (this.today != this.daysSinceCreation) {
+            this.today = this.daysSinceCreation;
+            this.newToday = 0;
+            this.learnToday = 0;
+            this.reviewToday = 0;
+        }
     }
 
     updateLearnCutoff() {
@@ -273,18 +317,15 @@ export class BaseScheduler {
     }
 
     resetNew() {
-        this.resetNewCount();
         this.newQueue.splice(0);
     }
 
     resetLearn() {
-        this.resetLearnCount();
         this.learnQueue.splice(0);
         this.learnDayQueue.splice(0);
     }
 
     resetReview() {
-        this.resetReviewCount();
         this.reviewQueue.splice(0);
     }
 
@@ -293,6 +334,7 @@ export class BaseScheduler {
         this.resetLearn();
         this.resetReview();
         this.resetNew();
+        this.fillQueues();
     }
     
     getLearnCard() {

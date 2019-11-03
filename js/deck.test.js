@@ -36,6 +36,10 @@ function generateTestDeckAnki() {
 function generateTestDeckSM2() {
     const deck = generateTestDeck();
     deck.scheduler = new SuperMemoScheduler(deck, deck.logger, deck.random, deck.dateUtil);
+    for (var card of deck.cards) {
+        expect(card.queue).toBe(Queue.NEW);
+        expect(card.cardType).toBe(CardType.NEW);
+    }
     return deck;
 }
 
@@ -110,6 +114,10 @@ function answerLearnCardsAnki(deck, ease, expectReview = true) {
 function answerNewCardsSM2(deck, ease) {
     const newPerDay = deck.scheduler.deckNewLimit;
     expect(newPerDay).toBe(4); // deck new limit should be 4
+    deck.scheduler.fillQueues();
+    expect(deck.scheduler.newQueue.length).toBe(newPerDay);
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    expect(deck.scheduler.reviewQueue.length).toBe(0);
     for (let i = 0; i < newPerDay; i++) {
         const card = deck.scheduler.getCard();
         expect(card).not.toBeNull();
@@ -317,12 +325,26 @@ test('Ensure startingLeft == 2002', () => {
 test('Good; SM2 card properties correct', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.GOOD);
-    // Those cards should now be in the learn queue
-    const newPerDay = deck.scheduler.deckNewLimit;
-    //expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    // Those cards should now be in the review queue (but not in the reviewQueue array)
+    deck.scheduler.fillQueues(); // invoke this manually, so we can check the queue lengths
+    expect(deck.scheduler.newQueue.length).toBe(0);
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    expect(deck.scheduler.reviewQueue.length).toBe(0); // cards aren't due today
     const card = deck.scheduler.getCard();
     expect(card).toBeNull();
-    //expect(card.queue).toBe(Queue.REVIEW);
-    //expect(card.cardType).toBe(CardType.REVIEW);
-    //expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 60);
+});
+
+test('Fail; SM2 card properties correct', () => {
+    const deck = generateTestDeckSM2();
+    answerNewCardsSM2(deck, Grade.FAIL);
+    // Those cards should now be in the learn queue
+    const newPerDay = deck.scheduler.deckNewLimit;
+    deck.scheduler.fillQueues(); // invoke this manually, so we can check the queue lengths
+    expect(deck.scheduler.newQueue.length).toBe(0);
+    expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    expect(deck.scheduler.reviewQueue.length).toBe(0);
+    const card = deck.scheduler.getCard();
+    expect(card.queue).toBe(Queue.LEARN);
+    expect(card.cardType).toBe(CardType.LEARN);
+    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 60);
 });

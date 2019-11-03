@@ -42,13 +42,4 @@ export class Card {
         this.eFactor = 2.5; // used by SM-2 - E-Factor (from easiness factor)
         this.repetitionEntries = []; // used by SM-18
     }
-
-    get combinedLeft() {
-        return this.leftToday * 1000 + this.leftToday;
-    }
-
-    set combinedLeft(value) {
-        this.leftToday = Math.floor(value / 1000);
-        this.left = value % 1000;
-    }
 }

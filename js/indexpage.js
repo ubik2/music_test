@@ -332,10 +332,6 @@ export class IndexPage {
     onReady(loadedDeck) {
         this.addRowForDeck();
 
-        // A freshly loaded deck doesn't have valid counts yet. Reset them
-        loadedDeck.scheduler.resetNewCount();
-        loadedDeck.scheduler.resetLearnCount();
-        loadedDeck.scheduler.resetReviewCount();
         this.refreshRowForDeck(loadedDeck);
 
         this.decks.push(loadedDeck);
