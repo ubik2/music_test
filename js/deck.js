@@ -1,7 +1,6 @@
 import { Card } from "./card";
 import { Logger, Random, DateUtil } from "./utils";
 import { BaseScheduler } from "./base_scheduler";
-import { AnkiScheduler } from "./anki_scheduler";
 
 export class Deck {
     /**
@@ -19,7 +18,7 @@ export class Deck {
         this.random = random || new Random();
         this.dateUtil = dateUtil || new DateUtil();
         this.creation = BaseScheduler.intNow(this.dateUtil); // seconds since epoch when deck was created
-        this.scheduler = scheduler || new AnkiScheduler(this, this.logger, this.random, this.dateUtil);
+        this.scheduler = scheduler;
     }
 
     addCard(card) {
