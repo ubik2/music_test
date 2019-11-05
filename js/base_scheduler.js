@@ -5,7 +5,7 @@ export const Grade = {
     NULL:  0, // complete blackout; you do not even recall ever knowing the answer
     BAD:   1, // wrong response; the correct answer seems to be familiar
     FAIL:  2, // wrong response that makes you say I knew it!
-    PASS:  3, // answer recallled with difficulty; perhapsm slightly incorrect
+    PASS:  3, // answer recallled with difficulty; perhaps slightly incorrect
     GOOD:  4, // correct response provided with some hesitation
     GREAT: 5  // excellent response
 };
@@ -116,6 +116,10 @@ export class BaseScheduler {
         if (i >= 0) {
             cardQueue.splice(i, 1);
         }
+    }
+
+    static clamp(x, lower, upper) {
+        return Math.min(upper, Math.max(lower, x));
     }
     
     /**
@@ -361,5 +365,9 @@ export class BaseScheduler {
      */
     intNow() {
         return BaseScheduler.intNow(this.dateUtil);
+    }
+
+    daysLate(card) {
+        return Math.min(0,  this.today - card.due);
     }
 }

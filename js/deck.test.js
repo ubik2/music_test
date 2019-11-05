@@ -4,6 +4,7 @@ import { MusicCard } from "./musiccard";
 import { CardType, Queue } from "./card";
 import { Grade, BaseScheduler } from "./base_scheduler";
 import { SuperMemoScheduler } from "./supermemo_scheduler";
+import { SuperMemoAnkiScheduler } from "./supermemo_anki_scheduler";
 
 let testLogger = new DummyLogger();
 let testRandom = new TestRandom();
@@ -36,13 +37,24 @@ function generateTestDeckSM2() {
     return deck;
 }
 
+
+function generateTestDeckAnki() {
+    const deck = generateTestDeck();
+    deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
+    for (var card of deck.cards) {
+        expect(card.queue).toBe(Queue.NEW);
+        expect(card.cardType).toBe(CardType.NEW);
+    }
+    return deck;
+}
+
 test('Checks that new deck has 42 cards', () => {
-    const deck = generateTestDeckSM2();
+    const deck = generateTestDeckAnki();
     expect(deck.cards.length).toBe(42);
 });
 
 test('Null shuffle', () => {
-    const deck = generateTestDeckSM2();
+    const deck = generateTestDeckAnki();
     const currentCards = deck.cards.slice(0, deck.cards.length);
     testRandom.appendRandom(Array(deck.cards.length).fill(0));
     const shuffledCards = deck.shuffledCards(deck.cards);
@@ -52,57 +64,6 @@ test('Null shuffle', () => {
         expect(currentCards[i].id).toBe(shuffledCards[i].id);
     }
 });
-
-// function answerNewCardsAnki(deck, ease) {
-//     const newPerDay = deck.scheduler.deckNewLimit;
-//     expect(newPerDay).toBe(4); // deck new limit should be 4
-//     for (let i = 0; i < newPerDay; i++) {
-//         const card = deck.scheduler.getCard();
-//         expect(card).not.toBeNull();
-//         expect(card.queue).toBe(Queue.NEW);
-//         expect(card.cardType).toBe(CardType.NEW);
-//         // we will move the card to the learn queue, and reschedule it; supply the random we need to randomize the due date
-//         testRandom.appendRandom([0]);
-//         deck.scheduler.answerCard(card, ease);
-//         if (ease === Grade.GREAT) {
-//             expect(card.queue).toBe(Queue.REVIEW);
-//             expect(card.cardType).toBe(CardType.REVIEW);
-//         } else if (ease === Grade.GOOD || ease === Grade.PASS) {
-//             expect(card.queue).toBe(Queue.LEARN);
-//             expect(card.cardType).toBe(CardType.LEARN);
-//         } else if (ease <= Grade.FAIL) {
-//             expect(card.queue).toBe(Queue.LEARN);
-//             expect(card.cardType).toBe(CardType.LEARN);
-//         }
-//     }
-// }
-
-// function answerLearnCardsAnki(deck, ease, expectReview = true) {
-//     const newPerDay = deck.scheduler.deckNewLimit;
-//     // we should have all those cards in the learn queue now
-//     expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
-//     // we will shuffle the learnQueue, so provide enough randomness for that (this will not change the order)
-//     testRandom.appendRandom(Array(deck.scheduler.learnQueue.length).fill(0));
-//     for (let i = 0; i < newPerDay; i++) {
-//         const card = deck.scheduler.getCard();
-//         expect(card).not.toBeNull();
-//         expect(card.queue).toBe(Queue.LEARN);
-//         expect(card.cardType).toBe(CardType.LEARN);
-//         deck.scheduler.answerCard(card, ease);
-//         if (ease === Grade.GOOD || ease === Grade.GREAT) {
-//             if (expectReview) {
-//                 expect(card.queue).toBe(Queue.REVIEW);
-//                 expect(card.cardType).toBe(CardType.REVIEW);
-//             } else {
-//                 expect(card.queue).toBe(Queue.LEARN);
-//                 expect(card.cardType).toBe(CardType.LEARN);
-//             }
-//         } else if (ease === Grade.PASS || ease <= Grade.FAIL) {
-//             expect(card.queue).toBe(Queue.LEARN);
-//             expect(card.cardType).toBe(CardType.LEARN);
-//         }
-//     }
-// }
 
 function answerNewCardsSM2(deck, ease) {
     const newPerDay = deck.scheduler.deckNewLimit;
@@ -155,7 +116,58 @@ function answerLearnCardsSM2(deck, ease) {
     }
 }
 
-test('Easy', () => {
+function answerNewCardsAnki(deck, ease) {
+    const newPerDay = deck.scheduler.deckNewLimit;
+    expect(newPerDay).toBe(4); // deck new limit should be 4
+    deck.scheduler.fillQueues();
+    expect(deck.scheduler.newQueue.length).toBe(newPerDay);
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    expect(deck.scheduler.reviewQueue.length).toBe(0);
+    for (let i = 0; i < newPerDay; i++) {
+        const card = deck.scheduler.getCard();
+        expect(card).not.toBeNull();
+        expect(card.queue).toBe(Queue.NEW);
+        expect(card.cardType).toBe(CardType.NEW);
+        // we will move the card to the learn queue, and reschedule it
+        deck.scheduler.answerCard(card, ease);
+        if (ease >= Grade.PASS) {
+            expect(card.queue).toBe(Queue.REVIEW);
+            expect(card.cardType).toBe(CardType.REVIEW);
+        } else if (ease <= Grade.FAIL) {
+            expect(card.queue).toBe(Queue.LEARN);
+            expect(card.cardType).toBe(CardType.LEARN);
+        }
+    }
+}
+
+function answerLearnCardsAnki(deck, ease) {
+    const newPerDay = deck.scheduler.deckNewLimit;
+    // we should have all those cards in the learn queue now
+    //expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    for (let i = 0; i < newPerDay; i++) {
+        const card = deck.scheduler.getCard();
+        expect(card).not.toBeNull();
+        expect(card.queue).toBe(Queue.LEARN);
+        expect(card.cardType).toBe(CardType.LEARN);
+        deck.scheduler.answerCard(card, ease);
+        if (ease >= Grade.PASS) {
+            expect(card.queue).toBe(Queue.REVIEW);
+            expect(card.cardType).toBe(CardType.REVIEW);
+        } else if (ease <= Grade.FAIL) {
+            expect(card.queue).toBe(Queue.LEARN);
+            expect(card.cardType).toBe(CardType.LEARN);
+        }
+    }
+    if (ease >= Grade.PASS) {
+        const nullCard = deck.scheduler.getCard();
+        expect(nullCard).toBeNull();
+    } else {
+        const nonNullCard = deck.scheduler.getCard();
+        expect(nonNullCard).not.toBeNull();
+    }
+}
+
+test('Easy SM2', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.GREAT);
     // If the cards are easy, they go right to the review queue, but not available now
@@ -164,7 +176,16 @@ test('Easy', () => {
     expect(badCard).toBeNull();
 });
 
-test('Fail, Good', () => {
+test('Easy', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GREAT);
+    // If the cards are easy, they go right to the review queue, but not available now
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    const badCard = deck.scheduler.getCard();
+    expect(badCard).toBeNull();
+});
+
+test('Fail, Good SM2', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.FAIL);
     // Those cards should now be in the learn queue
@@ -177,9 +198,30 @@ test('Fail, Good', () => {
     expect(badCard).toBeNull();
 });
 
-test('Good, Good', () => {
+test('Fail, Good', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.FAIL);
+    // Those cards should now be in the learn queue
+    const newPerDay = deck.scheduler.deckNewLimit;
+    expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    answerLearnCardsAnki(deck, Grade.GOOD);
+    // Now they should be in the review queue, but not available now
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    const badCard = deck.scheduler.getCard();
+    expect(badCard).toBeNull();
+});
+
+test('Good, Good SM2', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.GOOD);
+    expect(deck.scheduler.learnQueue.length).toBe(0);
+    const badCard = deck.scheduler.getCard();
+    expect(badCard).toBeNull();
+});
+
+test('Good, Good', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GOOD);
     expect(deck.scheduler.learnQueue.length).toBe(0);
     const badCard = deck.scheduler.getCard();
     expect(badCard).toBeNull();
@@ -213,7 +255,7 @@ test('fuzzedIntervalRange(1)', () => {
 //     expect(interval).toBe(1);
 // })
 
-test('Good; card properties correct', () => {
+test('Good SM2; card properties correct', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.GOOD);
     const card = deck.cards[0];
@@ -223,14 +265,34 @@ test('Good; card properties correct', () => {
     expect(card.due).toBe(Math.floor(deck.scheduler.today + 1));
 });
 
-test('Fail; card properties correct', () => {
+test('Good; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GOOD);
+    const card = deck.cards[0];
+    expect(card.queue).toBe(Queue.REVIEW);
+    expect(card.cardType).toBe(CardType.REVIEW);
+    expect(card.eFactor).toBe(2.5 + (.1 - 1 * (.08 + 1 * .02))); // 2.7
+    expect(card.due).toBe(Math.floor(deck.scheduler.today + 1));
+});
+
+test('Fail SM2; card properties correct', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.FAIL);
     const card = deck.cards[0];
     expect(card.queue).toBe(Queue.LEARN);
     expect(card.cardType).toBe(CardType.LEARN);
     expect(card.eFactor).toBe(2.5 + (.1 - 3 * (.08 + 3 * .02))); // 2.9
-    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 60);
+    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 1);
+});
+
+test('Fail; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.FAIL);
+    const card = deck.cards[0];
+    expect(card.queue).toBe(Queue.LEARN);
+    expect(card.cardType).toBe(CardType.LEARN);
+    expect(card.eFactor).toBe(2.5 - .2); // 2.3
+    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 1);
 });
 
 // test('Good; card properties correct', () => {
@@ -269,9 +331,17 @@ test('Fail; card properties correct', () => {
 //     testRandom.appendRandom([0]); // rescheduleLearnCard consumes a random
 // });
 
-test('Easy, card properties correct', () => {
+test('Easy SM2; card properties correct', () => {
     const deck = generateTestDeckSM2();
     answerNewCardsSM2(deck, Grade.GREAT);
+    // Those cards should now be in the learn queue
+    const card = deck.scheduler.getCard();
+    expect(card).toBeNull();
+});
+
+test('Easy; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GREAT);
     // Those cards should now be in the learn queue
     const card = deck.scheduler.getCard();
     expect(card).toBeNull();
@@ -369,5 +439,5 @@ test('Fail; SM2 card properties correct', () => {
     const card = deck.scheduler.getCard();
     expect(card.queue).toBe(Queue.LEARN);
     expect(card.cardType).toBe(CardType.LEARN);
-    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 60);
+    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 1);
 });

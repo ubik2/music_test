@@ -52,9 +52,18 @@ export class SuperMemoScheduler extends BaseScheduler {
         if (n === 1) {
             return 1;
         } else if (n === 2) {
-            return 6
+            return 6;
         } else {
-            return Math.ceil(card.easeFactor * this.getInterval(card, n - 1));
+            return Math.ceil(card.eFactor * this.getInterval(card, n - 1));
+        }
+    }
+
+    updateEaseFactorAndInterval(card, ease) {
+        card.eFactor = Math.max(1.3, card.eFactor + (0.1 - (5 - ease) * (0.08 + (5 - ease) * 0.02))); // Ease factor should always be at least 1.3
+        if (ease >= Grade.PASS) {
+            card.interval = this.getInterval(card, card.repetitions + 1); // at this point, we haven't incremented repetitions, so do it here
+        } else {
+            card.interval = this.getInterval(card, 1);
         }
     }
 
@@ -75,14 +84,13 @@ export class SuperMemoScheduler extends BaseScheduler {
         // This card used to be in a queue, so we'll want to remove it from that queue
         let oldQueue = this.getCardQueue(card.queue);
         BaseScheduler.removeFromQueue(oldQueue, card);
-        card.eFactor = Math.max(1.3, card.eFactor + (0.1 - (5 - ease) * (0.08 + (5 - ease) * 0.02))); // Ease factor should always be at least 1.3
+        this.updateEaseFactorAndInterval(card, ease);
         if (ease >= Grade.PASS) {
             card.repetitions = card.repetitions + 1;
             card.repetitionEntries.push(new RepetitionEntry(this.intNow(), ease));
             // this card can go into the future queue
             card.cardType = CardType.REVIEW;
             card.queue = Queue.REVIEW;
-            card.interval = this.getInterval(card, card.repetitions);
             card.due = this.today + card.interval;
         } else {
             card.repetitions = 1; // reset repetitions, since we don't know this card
@@ -90,8 +98,7 @@ export class SuperMemoScheduler extends BaseScheduler {
             // put this card back in the daily queue
             card.cardType = CardType.LEARN;
             card.queue = Queue.LEARN;
-            card.interval = this.getInterval(card, 1);
-            card.due = this.intNow() + 60; // reschedule for 1 minute from now
+            card.due = this.intNow() + card.interval;
         }
         this.queueCard(card);
     }

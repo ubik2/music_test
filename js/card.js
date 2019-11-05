@@ -40,6 +40,7 @@ export class Card {
         this.repetitions = 0;
         this.queue = Queue.NEW;
         this.eFactor = 2.5; // used by SM-2 - E-Factor (from easiness factor)
+        this.ease = 50; // used by Anki modified SM-2
         this.repetitionEntries = []; // used by SM-18
     }
 }
