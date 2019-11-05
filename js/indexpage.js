@@ -49,7 +49,7 @@ export class IndexPage {
             }
         }
         const deck = new Deck(keySignature, cards);
-        deck.scheduler = new SuperMemoScheduler(deck, deck.logger, deck.random, deck.dateUtil);
+        deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
         return deck;
     }
 

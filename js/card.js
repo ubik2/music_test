@@ -39,8 +39,7 @@ export class Card {
         this.lastInterval = 0;
         this.repetitions = 0;
         this.queue = Queue.NEW;
-        this.eFactor = 2.5; // used by SM-2 - E-Factor (from easiness factor)
-        this.ease = 50; // used by Anki modified SM-2
-        this.repetitionEntries = []; // used by SM-18
+        this.eFactor = 2.5; // used by anki and SM-2 - E-Factor (from easiness factor)
+        this.repetitionEntries = []; // would be used by SM-18, but I'm tracking it for logging
     }
 }
