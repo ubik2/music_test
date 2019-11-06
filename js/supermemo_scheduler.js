@@ -81,20 +81,29 @@ export class SuperMemoScheduler extends BaseScheduler {
         } else if (card.cardType === CardType.REVIEW) {
             this.reviewToday = this.reviewToday + 1;
         } // other queues are not limited
+        this.answerCardHelper(card, ease);
+        // Track the response
+        card.repetitionEntries.push(new RepetitionEntry(this.intNow(), ease));
+    }
+
+    /**
+     * This function is responsible for updating the card's cardType, queue, eFactor, interval, and due. It is also responsible for updating the queues.
+     * @param {Card} card 
+     * @param {Grade} ease 
+     */
+    answerCardHelper(card, ease) {
         // This card used to be in a queue, so we'll want to remove it from that queue
         let oldQueue = this.getCardQueue(card.queue);
         BaseScheduler.removeFromQueue(oldQueue, card);
         this.updateEaseFactorAndInterval(card, ease);
         if (ease >= Grade.PASS) {
             card.repetitions = card.repetitions + 1;
-            card.repetitionEntries.push(new RepetitionEntry(this.intNow(), ease));
             // this card can go into the future queue
             card.cardType = CardType.REVIEW;
             card.queue = Queue.REVIEW;
             card.due = this.today + card.interval;
         } else {
             card.repetitions = 1; // reset repetitions, since we don't know this card
-            card.repetitionEntries.push(new RepetitionEntry(this.intNow(), ease));
             // put this card back in the daily queue
             card.cardType = CardType.LEARN;
             card.queue = Queue.LEARN;
@@ -115,6 +124,22 @@ export class SuperMemoScheduler extends BaseScheduler {
             // TODO: check queue limits?
             BaseScheduler.sortIntoQueue(cardQueue, card);
         }
+    }
+
+    /**
+     * Re-queue a card. We'll remove it from the old queue, and if it's still valid, put it back into that queue in the proper position.
+     * This should be called when we update the due date on a card.
+     * 
+     * @param {Card} card 
+     * @param {Queue} oldCardQueue [undefined] - the card queue that the card should be removed from. If this is not provided, we will use the card's queue property
+     */
+    requeue(card, oldCardQueue = undefined) {
+        if (oldCardQueue === undefined) {
+            oldCardQueue = card.queue;
+        }
+        const oldQueue = this.getCardQueue(oldCardQueue);
+        BaseScheduler.removeFromQueue(oldQueue, card);
+        this.queueCard(card);
     }
 
     /**

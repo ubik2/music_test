@@ -130,10 +130,10 @@ function answerNewCardsAnki(deck, ease) {
         expect(card.cardType).toBe(CardType.NEW);
         // we will move the card to the learn queue, and reschedule it
         deck.scheduler.answerCard(card, ease);
-        if (ease >= Grade.PASS) {
+        if (ease >= Grade.GREAT) {
             expect(card.queue).toBe(Queue.REVIEW);
             expect(card.cardType).toBe(CardType.REVIEW);
-        } else if (ease <= Grade.FAIL) {
+        } else {
             expect(card.queue).toBe(Queue.LEARN);
             expect(card.cardType).toBe(CardType.LEARN);
         }
@@ -144,21 +144,24 @@ function answerLearnCardsAnki(deck, ease) {
     const newPerDay = deck.scheduler.deckNewLimit;
     // we should have all those cards in the learn queue now
     //expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    let minRepetitions = undefined;
     for (let i = 0; i < newPerDay; i++) {
         const card = deck.scheduler.getCard();
+        const repetitions = card.repetitions;
+        minRepetitions = (minRepetitions === undefined) ? repetitions : Math.min(repetitions, minRepetitions);
         expect(card).not.toBeNull();
         expect(card.queue).toBe(Queue.LEARN);
         expect(card.cardType).toBe(CardType.LEARN);
         deck.scheduler.answerCard(card, ease);
-        if (ease >= Grade.PASS) {
+        if (ease >= Grade.GREAT || (ease >= Grade.GOOD && repetitions === 2)) {
             expect(card.queue).toBe(Queue.REVIEW);
             expect(card.cardType).toBe(CardType.REVIEW);
-        } else if (ease <= Grade.FAIL) {
+        } else {
             expect(card.queue).toBe(Queue.LEARN);
             expect(card.cardType).toBe(CardType.LEARN);
         }
     }
-    if (ease >= Grade.PASS) {
+    if (ease >= Grade.GREAT || (ease >= Grade.GOOD && minRepetitions === 2)) {
         const nullCard = deck.scheduler.getCard();
         expect(nullCard).toBeNull();
     } else {
@@ -205,7 +208,20 @@ test('Fail, Good', () => {
     const newPerDay = deck.scheduler.deckNewLimit;
     expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
     answerLearnCardsAnki(deck, Grade.GOOD);
-    // Now they should be in the review queue, but not available now
+    // Now they should be in the learn queue
+    expect(deck.scheduler.learnQueue.length).toBe(4);
+    const goodCard = deck.scheduler.getCard();
+    expect(goodCard).not.toBeNull();
+});
+
+test('Fail, Great', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.FAIL);
+    // Those cards should now be in the learn queue
+    const newPerDay = deck.scheduler.deckNewLimit;
+    expect(deck.scheduler.learnQueue.length).toBe(newPerDay);
+    answerLearnCardsAnki(deck, Grade.GREAT);
+    // Now they should be in the review queue
     expect(deck.scheduler.learnQueue.length).toBe(0);
     const badCard = deck.scheduler.getCard();
     expect(badCard).toBeNull();
@@ -222,8 +238,22 @@ test('Good, Good SM2', () => {
 test('Good, Good', () => {
     const deck = generateTestDeckAnki();
     answerNewCardsAnki(deck, Grade.GOOD);
+    expect(deck.scheduler.learnQueue.length).toBe(4);
+    answerLearnCardsAnki(deck, Grade.GOOD);
+    expect(deck.scheduler.learnQueue.length).toBe(4);
+    const goodCard = deck.scheduler.getCard();
+    expect(goodCard).not.toBeNull();
+});
+
+test('Good, Good, Good', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GOOD);
+    expect(deck.scheduler.learnQueue.length).toBe(4);
+    answerLearnCardsAnki(deck, Grade.GOOD);
+    expect(deck.scheduler.learnQueue.length).toBe(4);
+    answerLearnCardsAnki(deck, Grade.GOOD);
     expect(deck.scheduler.learnQueue.length).toBe(0);
-    const badCard = deck.scheduler.getCard();
+    const badCard = deck.scheduler.getCard(); // just review cards for tomorrow
     expect(badCard).toBeNull();
 });
 
@@ -269,10 +299,43 @@ test('Good; card properties correct', () => {
     const deck = generateTestDeckAnki();
     answerNewCardsAnki(deck, Grade.GOOD);
     const card = deck.cards[0];
+    expect(card.queue).toBe(Queue.LEARN);
+    expect(card.cardType).toBe(CardType.LEARN);
+    expect(card.eFactor).toBe(2.5); // unchanged until review
+    expect(card.due).toBe(Math.floor(deck.scheduler.intNow() + 600)); // Answering Good moves to 10 minute step
+});
+
+test('Good, Good, Good; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GOOD);
+    answerLearnCardsAnki(deck, Grade.GOOD);
+    answerLearnCardsAnki(deck, Grade.GOOD);
+    const card = deck.cards[0];
     expect(card.queue).toBe(Queue.REVIEW);
     expect(card.cardType).toBe(CardType.REVIEW);
     expect(card.eFactor).toBe(2.5 + (.1 - 1 * (.08 + 1 * .02))); // 2.7
     expect(card.due).toBe(Math.floor(deck.scheduler.today + 1));
+});
+
+test('Great; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GREAT);
+    const card = deck.cards[0];
+    expect(card.queue).toBe(Queue.REVIEW);
+    expect(card.cardType).toBe(CardType.REVIEW);
+    expect(card.eFactor).toBe(2.5);
+    expect(card.due).toBe(Math.floor(deck.scheduler.today + 1)); // 1 day later
+});
+
+test('Good, Great; card properties correct', () => {
+    const deck = generateTestDeckAnki();
+    answerNewCardsAnki(deck, Grade.GOOD);
+    answerLearnCardsAnki(deck, Grade.GREAT);
+    const card = deck.cards[0];
+    expect(card.queue).toBe(Queue.REVIEW);
+    expect(card.cardType).toBe(CardType.REVIEW);
+    expect(card.eFactor).toBe(2.5);
+    expect(card.due).toBe(Math.floor(deck.scheduler.today + 4)); // 4 days later
 });
 
 test('Fail SM2; card properties correct', () => {
@@ -291,8 +354,9 @@ test('Fail; card properties correct', () => {
     const card = deck.cards[0];
     expect(card.queue).toBe(Queue.LEARN);
     expect(card.cardType).toBe(CardType.LEARN);
-    expect(card.eFactor).toBe(2.5 - .2); // 2.3
-    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 1);
+    expect(card.repetitions).toBe(0);
+    expect(card.eFactor).toBe(2.5); // 2.5
+    expect(card.due).toBe(Math.floor(startingDateMillis / 1000) + 60); // one minute
 });
 
 // test('Good; card properties correct', () => {
