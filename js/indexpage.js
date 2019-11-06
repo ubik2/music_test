@@ -1,11 +1,11 @@
 ﻿import { MusicCard } from "./musiccard";
 import { Deck } from "./deck";
 import { Persistence } from "./persistence";
-import { NoteInfo, FrequencyAnalyser } from "./frequencyanalyser";
+import { FrequencyAnalyser } from "./frequencyanalyser";
 import { Config } from "./config";
 import { Player } from "./player";
 import { SF2Parser } from './sf2parser';
-import { SuperMemoScheduler } from "./supermemo_scheduler";
+import { SuperMemoAnkiScheduler } from "./supermemo_anki_scheduler";
 
 const deckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
