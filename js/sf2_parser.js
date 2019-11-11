@@ -1,4 +1,4 @@
-import { Chunk, RiffParser } from './riffparser';
+import { Chunk, RiffParser } from './riff_parser';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("ascii");

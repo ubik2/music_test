@@ -1,6 +1,6 @@
 import { Deck } from "./deck";
 import { Logger, DummyLogger, TestRandom, TestDateUtil } from "./utils";
-import { MusicCard } from "./musiccard";
+import { MusicCard } from "./music_card";
 import { CardType, Queue } from "./card";
 import { Grade, BaseScheduler } from "./base_scheduler";
 import { SuperMemoScheduler } from "./supermemo_scheduler";

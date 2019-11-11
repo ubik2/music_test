@@ -1,13 +1,18 @@
-import { NotePage } from "./notepage";
+import { NoteHelper } from "./note_helper";
 import { Card, CardType } from "./card";
 import { Deck } from "./deck";
 
-export class PracticePage extends NotePage {
-    constructor() {
-        super();
-        this.currentDeck = null;
+export class PracticePage {
+    constructor(document, deck, player) {
+        this.document = document;
+        this.currentDeck = deck;
+        this.scoreDiv = document.getElementById("score");
+        this.noteHelper = new NoteHelper(this.scoreDiv, player);
         this.lastNote = null; // the previous note we selected while forming the series of notes to practice
         this.notesMap = Object(); // map of learned notes we can practice with
+        console.log("almost out of constructor");
+        this.setup();
+        console.log("leaving of constructor");
     }
 
     /**
@@ -50,6 +55,9 @@ export class PracticePage extends NotePage {
      * @return {string} the randomly selected value from the array
      */
     static chooseRandomKey(inArray) {
+        if (inArray.length === 0) {
+            throw new Error("Unable to choose random element from empty array");
+        }
         return inArray[Math.floor(Math.random() * Math.floor(inArray.length))];
     }
 
@@ -58,18 +66,17 @@ export class PracticePage extends NotePage {
      * This will generally be called after the page has loaded, so that the DOM objects are available.
      */
     setup() {
-        super.setup();
         // TODO: set up any buttons, display elements on page
-        document.getElementById("playButton").addEventListener("click", () => this.playNotes(this.currentNotes));
-        document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
-        document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
+        this.document.getElementById("playButton").addEventListener("click", () => this.noteHelper.playNotes(this.noteHelper.currentNotes));
+        this.document.getElementById("nextButton").addEventListener("click", () => this.nextCards());
+        this.document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
         
         // set up notesMap, get just the cards we've already learned
         const cards = this.currentDeck.cards.filter(card => card.cardType === CardType.REVIEW);
         if (cards.length < 1) {
             return null;
         }
-        this.keySignature = cards[0].keySignature;
+        this.noteHelper.keySignature = cards[0].keySignature;
 
         // create map for transitions
         for (var card of cards) {
@@ -80,10 +87,6 @@ export class PracticePage extends NotePage {
             this.addRowForSelectableNotes(card.note1, card.note2);
         }
 
-        // get the cards from this deck that the user has already learned and use those to make up the practice session
-        this.getCards();
-        this.displayNotes();
-
 /*        for (let [key, value] of Object.entries(notesMap)) {
             console.log('key=' , key, 'value=', value);
             this.addRowForSelectableNotes(key, value);
@@ -91,61 +94,51 @@ export class PracticePage extends NotePage {
     }
 
     /**
-     * Set up various fields that are dependent on objects not available at the time of construction.
-     * This will generally be called after the page has loaded, so that the DOM objects are available.
-     *
-     * @param {Deck} deck the deck that we will be interacting with on this page
-     * @param {Player} player the player that will be used to play sounds
-     */
-    setupPracticePage(deck, player) {
-        this.currentDeck = deck;
-        this.player = player;
-        this.setup();
-    }
-
-    /**
      * Build a set of notes based on the cards from the currentDeck that should be practiced.
-     * This will also set the currentNotes field to a list of up to 4 notes selected from our cards in review.
+     * This will also return a list of up to 4 notes selected from our cards in review.
      * 
-     * @return {Array.<Card>} the list of cards that should be practiced
+     * @return {Array.<Vex.Flow.StaveNote>} the list of notes that should be practiced
      */
     getCards() {
         // pick a random starting note (different from the last one)
         let currentNote;
         const notesArray = Array.from(Object.keys(this.notesMap));
+        if (notesArray.length === 0) {
+            return [];
+        }
         do {
             currentNote = PracticePage.chooseRandomKey(notesArray);
         } while (currentNote == this.lastNote);
         this.lastNote = currentNote;
 
-        this.currentNotes = [];
-        while (this.currentNotes.length < 4) {
-            this.currentNotes.push(NotePage.getStaveNote(currentNote));
+        let currentNotes = [];
+        while (currentNotes.length < 4) {
+            currentNotes.push(NoteHelper.getStaveNote(currentNote));
 
             // choose next note
             currentNote = PracticePage.chooseRandomKey(this.notesMap[currentNote]);
         }
-        return this.currentNotes;
+        return currentNotes;
     }
 
     /**
      * Update our page to display a new set of notes from another selection of cards
      */
     nextCards() {
-        this.getCards();
-        this.displayNotes();
+        this.noteHelper.currentNotes = this.getCards();
+        this.noteHelper.displayNotes();
     }
 
     addRowForSelectableNotes(fromNote, toNote) {
-        const tableElement = document.getElementById('notesSelectTable');
+        const tableElement = this.document.getElementById('notesSelectTable');
 
-        const tableRow = document.createElement('tr');
+        const tableRow = this.document.createElement('tr');
 
-        const selectElement = document.createElement('td');
+        const selectElement = this.document.createElement('td');
         const noteId = fromNote + "-" + toNote;
         selectElement.setAttribute('id', noteId);
 
-        const selectCheckBox = document.createElement("INPUT");
+        const selectCheckBox = this.document.createElement("INPUT");
         selectCheckBox.setAttribute("type", "checkbox");
         selectCheckBox.checked = true;
         selectCheckBox.onclick = () => {
@@ -162,12 +155,12 @@ export class PracticePage extends NotePage {
         selectElement.appendChild(selectCheckBox);
         tableRow.appendChild(selectElement);
 
-        const fromElement = document.createElement('td');
+        const fromElement = this.document.createElement('td');
         fromElement.setAttribute('id', 'fromNote');
         fromElement.innerText = fromNote;
         tableRow.appendChild(fromElement);
         
-        const toElement = document.createElement('td');
+        const toElement = this.document.createElement('td');
         toElement.setAttribute('id', 'toNote');
         toElement.innerText = toNote;
         tableRow.appendChild(toElement);

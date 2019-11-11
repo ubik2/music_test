@@ -1,19 +1,24 @@
-﻿import { MusicCard } from "./musiccard";
+﻿import { MusicCard } from "./music_card";
+import { MusicScaleCard } from "./music_scale_card";
 import { Deck } from "./deck";
 import { Persistence } from "./persistence";
-import { FrequencyAnalyser } from "./frequencyanalyser";
+import { FrequencyAnalyser } from "./frequency_analyser";
 import { Config } from "./config";
 import { Player } from "./player";
-import { SF2Parser } from './sf2parser';
+import { SF2Parser } from './sf2_parser';
 import { SuperMemoAnkiScheduler } from "./supermemo_anki_scheduler";
+import { MusicCardPage } from "./music_card_page";
+import { MusicScalePage } from "./music_scale_page";
+import { PracticePage } from "./practice_page";
+import { SettingsPage } from "./settings_page";
 
-const deckContents = {
+const musicDeckContents = {
     "C": ['C/4', 'D/4', 'E/4', 'F/4', 'G/4', 'A/4', 'B/4'],
     "D": ['D/4', 'E/4', 'F#/4', 'G/4', 'A/4', 'B/4', 'C#/5'],
     "F": ['F/4', 'G/4', 'A/4', 'Bb/4', 'C/5', 'D/5', 'E/5'],
     "Cb": ['Cb/4', 'Db/4', 'Eb/4', 'Fb/4', 'Gb/4', 'Ab/4', 'Bb/4']
 };
-const keySignatures = Object.keys(deckContents);
+const keySignatures = Object.keys(musicDeckContents);
 
 export class IndexPage {
     constructor() {
@@ -24,6 +29,8 @@ export class IndexPage {
         this.decks = [];
         this.player = new Player(new SF2Parser(), "./sf2/KawaiStereoGrand.sf2", (player) => this.handleSoundFont(player));
         this.soundFontLoaded = false;
+        this.deckRows = {}; // mapping from row id to deck
+        this.frameNames = ["main", "practice", "cards", "settings"];
     }
 
     dispose() {
@@ -38,7 +45,7 @@ export class IndexPage {
     }
 
     static generateDeck(keySignature) {
-        const keys = deckContents[keySignature];
+        const keys = musicDeckContents[keySignature];
         const cards = [];
         for (let i = 0; i < 7; i++) {
             for (let j = 0; j < 7; j++) {
@@ -48,7 +55,15 @@ export class IndexPage {
                 cards.push(new MusicCard(keySignature, keys[i], keys[j]));
             }
         }
-        const deck = new Deck(keySignature, cards);
+        const deck = new Deck(keySignature + " Major", cards);
+        deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
+        return deck;
+    }
+
+    static generateScalesDeck() {
+        const scalesDeckContents = [ "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "A#", "Bb", "B" ]; // D#, "G#", 
+        const cards = scalesDeckContents.map((keySignature) => new MusicScaleCard(keySignature));
+        const deck = new Deck("Scales", cards);
         deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
         return deck;
     }
@@ -68,25 +83,39 @@ export class IndexPage {
             this.refreshRowForDeck(deck);
         }
 
-        document.getElementById("main").hidden = false;
-        document.getElementById("practice").hidden = true;
-        document.getElementById("cards").hidden = true;
-        document.getElementById("settings").hidden = true;
+        this.showFrameByName("main");
         document.getElementById("settingsButton").hidden = false;
+    }
+
+    showFrameByName(frameName) {
+        for (var currentFrameName of this.frameNames) {
+            if (currentFrameName === frameName) {
+                document.getElementById(currentFrameName).hidden = false;
+            } else {
+                document.getElementById(currentFrameName).hidden = true;
+            }
+        }
     }
 
     showCards(deck) {
         this.frequencyAnalyser.stop();
-        this.frequencyAnalyser.keySignature = deck.deckId;
-        this.frequencyAnalyser.start();
-        document.getElementById("main").hidden = true;
-        document.getElementById("practice").hidden = true;
-        document.getElementById("cards").hidden = false;
-        document.getElementById("settings").hidden = true;
+        if (deck.deckId !== "Scales") {
+            this.frequencyAnalyser.keySignature = deck.deckId;
+            this.frequencyAnalyser.start();
+        }
+        this.showFrameByName("cards");
         document.getElementById("settingsButton").hidden = true;
         window.frames["cards"].src = "card.html";
         window.frames["cards"].onload = () => {
-            window.frames["cards"].contentWindow.cardPage.setupCardPage(deck, this.player);
+            const cardsContentWindow = window.frames["cards"].contentWindow;
+            let cardPage;
+            if (deck.deckId !== "Scales") {
+                cardPage = new MusicCardPage(cardsContentWindow.document, deck, this.player);
+            } else {
+                cardPage = new MusicScalePage(cardsContentWindow.document, deck, this.player);
+            }
+            window.frames["cards"].contentWindow.cardPage = cardPage;
+            cardPage.getCard();
         };
     }
 
@@ -94,29 +123,30 @@ export class IndexPage {
         this.frequencyAnalyser.stop();
         this.frequencyAnalyser.keySignature = deck.deckId;
         this.frequencyAnalyser.start();
-        document.getElementById("main").hidden = true;
-        document.getElementById("cards").hidden = true;
-        document.getElementById("practice").hidden = false;
-        document.getElementById("settings").hidden = true;
+        this.showFrameByName("practice");
         document.getElementById("settingsButton").hidden = true;
         window.frames["practice"].src = "practice.html";
         window.frames["practice"].onload = () => {
-            window.frames["practice"].contentWindow.practicePage.setupPracticePage(deck, this.player);
+            const practiceContentWindow = window.frames["practice"].contentWindow;
+            console.log("loading practice");
+            const practicePage = new PracticePage(practiceContentWindow.document, deck, this.player);
+            console.log("CRETED practicepage");
+            practiceContentWindow.practicePage = practicePage;
+            console.log("CRETdrawing cardsED practicepage");
+            practicePage.nextCards();
             console.log('indexpage: loaded practice');
         };
     }
 
     showSettings() {
         this.frequencyAnalyser.stop();
-        document.getElementById("main").hidden = true;
-        document.getElementById("cards").hidden = true;
-        document.getElementById("practice").hidden = true;
-        document.getElementById("settings").hidden = false;
+        this.showFrameByName("settings");
         document.getElementById("settingsButton").hidden = true;
 
         window.frames["settings"].src = "settings.html";
         window.frames["settings"].onload = () => {
-            window.frames["settings"].contentWindow.settingsPage.setupSettingsPage();
+            window.frames["settings"].contentWindow.settingsPage = new SettingsPage();
+            window.frames["settings"].contentWindow.settingsPage.setupSettingsPage(window.frames["settings"].contentWindow.document);
             console.log('indexpage: loaded settings page');
         };
     }
@@ -268,6 +298,27 @@ export class IndexPage {
                     }
                 });
             });
+            // load up the scale deck
+            persistence.loadDeck("Scales", (success, loadedDeck) => {
+                if (success) {
+                    if (loadedDeck === undefined) {
+                        console.log("Generating new scale deck");
+                        const newDeck = IndexPage.generateScalesDeck();
+                        persistence.saveDeck(newDeck, (success, savedDeck) => {
+                            if (success) {
+                                this.onReady(savedDeck);
+                            } else {
+                                throw "Failed to save newly generated deck";
+                            }
+                        });
+                    } else {
+                        console.log("Loaded deck: ", loadedDeck);
+                        this.onReady(loadedDeck);
+                    }
+                } else {
+                    throw "Failed to load deck";
+                }
+            });
         });
 
         document.getElementById("settingsButton").addEventListener("click", () => this.showSettings());
@@ -278,9 +329,9 @@ export class IndexPage {
         const tableElement = document.getElementById('decks');
         const tableRow = document.createElement('tr');
         this.lastRowCount++;
-        const deckScaleElement = document.createElement('td');
-        deckScaleElement.setAttribute('id', 'deckScale' + this.lastRowCount);
-        tableRow.appendChild(deckScaleElement);
+        const deckNameElement = document.createElement('td');
+        deckNameElement.setAttribute('id', 'deckName' + this.lastRowCount);
+        tableRow.appendChild(deckNameElement);
         const newElement = document.createElement('td');
         newElement.setAttribute('id', 'new' + this.lastRowCount);
         tableRow.appendChild(newElement);
@@ -309,11 +360,12 @@ export class IndexPage {
         practiceButtonTableElement.appendChild(practiceButtonElement);
         tableRow.appendChild(practiceButtonTableElement);
         tableElement.appendChild(tableRow);
+        return this.lastRowCount;
     }
 
     refreshRowForDeck(inDeck) {
-        const idSuffix = '' + (1 + keySignatures.indexOf(inDeck.deckId));
-        document.getElementById("deckScale" + idSuffix).innerText = inDeck.deckId + ' Major';
+        const idSuffix = '' + this.deckRows[inDeck.deckId];
+        document.getElementById("deckName" + idSuffix).innerText = inDeck.deckId;
         document.getElementById("new" + idSuffix).innerText = inDeck.scheduler.newCount;
         document.getElementById("learning" + idSuffix).innerText = inDeck.scheduler.learnCount;
         document.getElementById("review" + idSuffix).innerText = inDeck.scheduler.reviewCount;
@@ -323,14 +375,15 @@ export class IndexPage {
             buttonElement.onclick = () => this.showCards(inDeck);
         }
         const practiceButtonElement = document.getElementById("practiceButton" + idSuffix);
-        if (this.soundFontLoaded) {
+        if (this.soundFontLoaded && inDeck.deckId !== "Scales") {
             practiceButtonElement.disabled = false;
             practiceButtonElement.onclick = () => this.showPractice(inDeck);
         }
     }
 
     onReady(loadedDeck) {
-        this.addRowForDeck();
+        const rowId = this.addRowForDeck();
+        this.deckRows[loadedDeck.deckId] = rowId;
 
         this.refreshRowForDeck(loadedDeck);
 

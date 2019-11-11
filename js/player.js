@@ -1,4 +1,4 @@
-import { GeneratorHelper, GeneratorOperations, ModulatorHelper } from "./sf2parser";
+import { GeneratorHelper, GeneratorOperations, ModulatorHelper } from "./sf2_parser";
 import { Schedule, Clock } from "./clock";
 
 const EnvelopePhases = {

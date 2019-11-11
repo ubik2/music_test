@@ -1,19 +1,14 @@
-﻿import { MusicCard } from "./musiccard";
-import { Deck } from "./deck";
+﻿import { Deck } from "./deck";
 import { Persistence } from "./persistence";
-import { NotePage} from "./notepage";
 import { Grade } from "./base_scheduler";
-
-import Vex from "../node_modules/vexflow/src/index";
 
 const CardFacing = {
     Front: 0,
     Back: 1
 };
 
-export class CardPage extends NotePage {
+export class CardPage {
     constructor() {
-        super();
         this.currentCard = null;
         this.currentDeck = null;
         this.cardFacing = CardFacing.Front;
@@ -21,6 +16,9 @@ export class CardPage extends NotePage {
         this.frontButtons = null;
         this.backButtons = null;
         this.messageElement = null;
+        this.frontTextDiv = null;
+        this.backTextDiv = null;
+        this.document = null;
     }
 
     /**
@@ -28,62 +26,48 @@ export class CardPage extends NotePage {
      * This will generally be called after the page has loaded, so that the DOM objects are available.
      */
     setup() {
-        super.setup();
-
-        document.getElementById("playButton").addEventListener("click", () => this.playNotes([this.currentNotes[0]]));
-        document.getElementById("replayButton").addEventListener("click", () => this.playNotes([this.currentNotes[1]]));
-        document.getElementById("replayAllButton").addEventListener("click", () => this.playNotes(this.currentNotes));
-        document.getElementById("showAnswerButton").addEventListener("click", () => {
+        this.document.getElementById("showAnswerButton").addEventListener("click", () => {
             this.backCard();
-            this.playNotes([this.currentNotes[1]]);
         });
-        document.getElementById("againButton").addEventListener("click", () => this.nextCard(Grade.FAIL));
-        document.getElementById("hardButton").addEventListener("click", () => this.nextCard(Grade.PASS));
-        document.getElementById("goodButton").addEventListener("click", () => this.nextCard(Grade.GOOD));
-        document.getElementById("easyButton").addEventListener("click", () => this.nextCard(Grade.GREAT));
+        this.document.getElementById("againButton").addEventListener("click", () => this.nextCard(Grade.FAIL));
+        this.document.getElementById("hardButton").addEventListener("click", () => this.nextCard(Grade.PASS));
+        this.document.getElementById("goodButton").addEventListener("click", () => this.nextCard(Grade.GOOD));
+        this.document.getElementById("easyButton").addEventListener("click", () => this.nextCard(Grade.GREAT));
 
-        document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
-
-        //const keyOptions = ["B", "E", "A", "D", "G", "C", "F", "Bb", "Eb", "Ab", "Db", "Gb"];
-        //const otherOptions = ["Cb", "F#", "C#"];
-        //const keySignature = "C"; // keyOptions[Math.floor(Math.random() * keyOptions.length)];
-        //deck.shuffleDeck();
-        this.getCard();
+        this.document.getElementById("homeButton").addEventListener("click", () => { window.parent.indexPage.showMenu(); });
     }
 
     /**
     * Set up various fields that are dependent on objects not available at the time of construction.
     * This will generally be called after the page has loaded, so that the DOM objects are available.
     * 
+    * @param {object} document the dom document object
     * @param {Deck} deck the deck that we will be interacting with on this page
-    * @param {Player} player the player that will be used to play sounds
-    */
-    setupCardPage(deck, player) {
+x    */
+    setupCardPage(document, deck) {
+        this.document = document;
+
         this.persistence = new Persistence();
-        this.player = player;
         this.currentDeck = deck;
 
         this.frontButtons = [
-            document.getElementById("playButton"),
-            document.getElementById("showAnswerButton")
+            this.document.getElementById("showAnswerButton")
         ];
         this.backButtons = [
-            document.getElementById("againButton"),
-            document.getElementById("hardButton"),
-            document.getElementById("goodButton"),
-            document.getElementById("easyButton"),
-            document.getElementById("replayButton"),
-            document.getElementById("replayAllButton")
+            this.document.getElementById("againButton"),
+            this.document.getElementById("hardButton"),
+            this.document.getElementById("goodButton"),
+            this.document.getElementById("easyButton"),
         ];
-        this.messageElement = document.getElementById("message");
+        this.messageElement = this.document.getElementById("message");
+        this.frontTextDiv = this.document.getElementById("frontText");
+        this.backTextDiv = this.document.getElementById("backText");
 
         this.setup();
-        // Override the click callback, so we can't play the answer before flipping the card to the back
-        this.clickCallback = this.handleNoteClick;
     }
 
     /**
-     * Get the next card in the deck, display the front, and play the first note.
+     * Get the next card in the deck, and display the front.
      *
      * @return {Card} the next card in the deck or null if we are done for the day
      */
@@ -93,7 +77,6 @@ export class CardPage extends NotePage {
             this.message('Done for the day');
         } else {
             this.frontCard(card);
-            this.playNotes([this.currentNotes[0]]);
         }
         return card;
     }
@@ -110,23 +93,11 @@ export class CardPage extends NotePage {
         return this.getCard();
     }
 
-    /**
-    * Play the specified note, but only if it is enabled. While displaying the front of the card, only the first note is enabled.
-    *
-    * @param {Vex.Flow.StaveNote} note the note that was clicked on
-    */
-    handleNoteClick(note) {
-        if (this.cardFacing === CardFacing.Front && this.currentNotes.indexOf(note) === 0) {
-            this.playNotes([note]);
-        } else if (this.cardFacing === CardFacing.Back && this.currentNotes.indexOf(note) >= 0) {
-            this.playNotes([note]);
-        }
-    }
 
     /**
      * Display the front of the specified card.
      *
-     * @param {MusicCard} card - the card that we will be displaying
+     * @param {Card} card - the card that we will be displaying
     */
     frontCard(card) {
         this.cardFacing = CardFacing.Front;
@@ -136,9 +107,8 @@ export class CardPage extends NotePage {
             this.messageElement.hidden = true;
         }
         this.currentCard = card;
-        this.currentNotes = [NotePage.getStaveNote(this.currentCard.note1), NotePage.getStaveNote(this.currentCard.note2)];
-        this.keySignature = this.currentCard.keySignature;
-        this.displayNotes();
+        this.frontTextDiv.hidden = false;
+        this.backTextDiv.hidden = true;
     }
 
     /**
@@ -151,6 +121,8 @@ export class CardPage extends NotePage {
         if (this.messageElement !== null) {
             this.messageElement.hidden = true;
         }
+        this.frontTextDiv.hidden = true;
+        this.backTextDiv.hidden = false;
     }
 
     /**

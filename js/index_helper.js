@@ -1,4 +1,4 @@
-import { IndexPage } from "./indexpage";
+import { IndexPage } from "./index_page";
 
 let indexPage = null;
 function setupIndexPage() {
