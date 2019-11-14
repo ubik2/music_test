@@ -277,7 +277,7 @@ export class IndexPage {
 
             // load up all the decks
             keySignatures.forEach((keySignature) => {
-                persistence.loadDeck(keySignature, (success, loadedDeck) => {
+                persistence.loadDeck(keySignature + " Major", (success, loadedDeck) => {
                     if (success) {
                         if (loadedDeck === undefined) {
                             console.log("Generating new deck");
