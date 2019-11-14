@@ -21,6 +21,15 @@ export const NewSpread = {
     NEW_CARDS_FIRST: 2
 };
 
+export class BaseSchedulerDeckState {
+    constructor(scheduler) {
+        this.today = scheduler.today;
+        this.newToday = scheduler.newToday;
+        this.learnToday = scheduler.learnToday;
+        this.reviewToday = scheduler.reviewToday;
+    }
+}
+
 export class BaseScheduler {
     constructor(deck, logger = null, random = null, dateUtil = null) {
         this.deck = deck;
@@ -184,6 +193,19 @@ export class BaseScheduler {
 
     get globalConfig() {
         return this._globalConfig;
+    }
+
+    applyState(schedulerState) {
+        if (this.daysSinceCreation === schedulerState.today) {
+            this.newToday = schedulerState.newToday;
+            this.learnToday = schedulerState.learnToday;
+            this.reviewToday = schedulerState.reviewToday;
+        }
+        this.reset();
+    }
+
+    getSchedulerDeckState() {
+        return new BaseSchedulerDeckState(this);
     }
 
     /**

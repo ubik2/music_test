@@ -19,6 +19,8 @@ export class Deck {
         this.dateUtil = dateUtil || new DateUtil();
         this.creation = BaseScheduler.intNow(this.dateUtil); // seconds since epoch when deck was created
         this.scheduler = scheduler;
+        this.schedulerType = typeof(scheduler); // Used by persistence
+        this.schedulerState = null; // Used by persistence
     }
 
     addCard(card) {
