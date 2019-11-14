@@ -1,6 +1,8 @@
 import { Logger, Random, DateUtil } from "./utils";
 import { Deck } from "./deck";
+import { BaseScheduler } from "./base_scheduler";
 import { SuperMemoScheduler } from "./supermemo_scheduler";
+import { SuperMemoAnkiScheduler } from "./supermemo_anki_scheduler";
 
 const TransactionType = {
     READONLY: "readonly",
@@ -9,7 +11,7 @@ const TransactionType = {
 
 const PersistenceConstants = {
     DATABASE_NAME: "MusicTestDatabase",
-    DATABASE_VERSION: 2,
+    DATABASE_VERSION: 3,
     DECK_TABLE: "decks",
     CONFIG_TABLE: "config"
 };
@@ -122,6 +124,8 @@ export class Persistence {
             return undefined;
         }
         const deck = Object.assign({}, injectedDeck);
+        deck.schedulerState = deck.scheduler.getSchedulerDeckState();
+        deck.schedulerType = deck.scheduler.constructor.name;
         // These are temporal attributes that should not be persisted
         delete deck.scheduler;
         // These are injected attributes that should not be persisted
@@ -136,9 +140,19 @@ export class Persistence {
             return undefined;
         }
         const deck = new Deck(undefined, undefined, undefined, this.logger, this.random, this.dateUtil);
-        deck.scheduler = new SuperMemoScheduler(deck, this.logger, this.random, this.dateUtil);
+        const schedulerState = uninjectedDeck.schedulerState;
+        const schedulerType = uninjectedDeck.schedulerType;
+        let scheduler;
+        if (schedulerType === SuperMemoAnkiScheduler.prototype.constructor.name) {
+            scheduler = new SuperMemoScheduler(deck, this.logger, this.random, this.dateUtil);
+        } else if (schedulerType === SuperMemoScheduler.prototype.constructor.name) {
+            scheduler = new SuperMemoScheduler(deck, this.logger, this.random, this.dateUtil);
+        } else { // if (schedulerType === BaseScheduler.prototype.constructor.name) {
+            scheduler = new BaseScheduler(deck, this.logger, this.random, this.dateUtil);
+        }
         const rv = Object.assign(deck, uninjectedDeck);
-        rv.scheduler.reset();
+        rv.scheduler = scheduler;
+        scheduler.applyState(schedulerState);
         return rv;
     }
 
