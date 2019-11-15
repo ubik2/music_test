@@ -1,4 +1,4 @@
-import Vex from "../node_modules/vexflow/src";
+import Vex from "../node_modules/vexflow/src/index";
 
 import { Schedule, Clock } from "./clock";
 
