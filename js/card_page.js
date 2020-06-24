@@ -138,7 +138,6 @@ x    */
             this.messageElement.innerText = str;
             this.messageElement.hidden = false;
         }
-        this.displayNotes(true);
     }
 
 }

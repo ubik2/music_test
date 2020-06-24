@@ -28,4 +28,8 @@ export class NotePage extends CardPage {
         super.frontCard(card);
     }
 
+    message(str) {
+        super.message(str);
+        this.noteHelper.displayNotes(true);
+    }
 }
