@@ -4,6 +4,7 @@
   "description": "",
   "private": true,
   "dependencies": {
+    "express": "^4.17.1",
     "nan": "^2.14.0",
     "tone": "^13.4.9",
     "vexflow": "^1.2.89"
@@ -11,11 +12,10 @@
   "devDependencies": {
     "babel-jest": "^26.1.0",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
-    "http-server": "^0.12.3",
     "jest": "^26.1.0"
   },
   "scripts": {
-    "start": "http-server -c-1 -p 8081 -e js",
+    "start": "node app.js",
     "test": "./node_modules/jest/bin/jest.js"
   },
   "repository": {
