@@ -61,7 +61,7 @@ export class NoteHelper {
             }
         }
         const wholeNoteDuration = 60 * note.voice.time.beat_value / tempo; // a whole note would last this long in seconds
-        const parsedNote = Vex.Flow.parseNoteData(note);
+        const parsedNote = Vex.Flow.parseNoteStruct(note);
         const fraction = Vex.Flow.durationToNumber(parsedNote.duration); // this returns 4 for a quarter note
         return wholeNoteDuration / fraction;
     }
