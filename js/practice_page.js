@@ -80,11 +80,12 @@ export class PracticePage {
 
         // create map for transitions
         for (var card of cards) {
-            PracticePage.addMapping(this.notesMap, card.note1, card.note2);
-            PracticePage.addMapping(this.notesMap, card.note2, card.note1);
-
-            // display the notes that we will be practicing in case the user wants to select only a subset for practice
-            this.addRowForSelectableNotes(card.note1, card.note2);
+            for (var i = 0; i < card.notes.length - 1; i++) {
+                PracticePage.addMapping(this.notesMap, card.notes[i], card.notes[i+1]);
+                PracticePage.addMapping(this.notesMap, card.notes[i+1], card.notes[i]);
+                // display the notes that we will be practicing in case the user wants to select only a subset for practice
+                this.addRowForSelectableNotes(card.notes[i], card.notes[i+1]);
+            }
         }
 
 /*        for (let [key, value] of Object.entries(notesMap)) {
