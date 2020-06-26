@@ -2,7 +2,7 @@
 import { Persistence } from "./persistence";
 import { Grade } from "./base_scheduler";
 
-const CardFacing = {
+export const CardFacing = {
     Front: 0,
     Back: 1
 };

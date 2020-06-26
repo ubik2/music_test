@@ -8,6 +8,7 @@ import { Schedule, Clock } from "./clock";
 export class NoteHelper {
     constructor(scoreDiv, player) {
         this.keySignature = "C";
+        this.clef = "treble";
         this.currentNotes = [];
         this.activeNotes = [];
         this.player = player;
@@ -38,10 +39,11 @@ export class NoteHelper {
      * Generate a quarter note for playing and displaying
      * 
      * @param {string} note - note in the Vex.Flow form (e.g. "C#/4")
+     * @param {string} clef - clef in the Vex.Flow form (e.g. "treble")
      * @return {Vex.Flow.StaveNote} - stave note version of the note
      */
-    static getStaveNote(note) {
-        return new Vex.Flow.StaveNote({ clef: "treble", keys: [note], duration: "q" });
+    static getStaveNote(note, clef = "treble") {
+        return new Vex.Flow.StaveNote({ clef: clef, keys: [note], duration: "q", auto_stem: true });
     }
 
     /**
@@ -92,8 +94,7 @@ export class NoteHelper {
         context.openGroup();
 
         const stave = new Vex.Flow.Stave(10, 40, 200);
-        stave.addClef("treble");
-
+        stave.addClef(this.clef);
         stave.setKeySignature(this.keySignature);
         stave.setContext(context).draw();
 

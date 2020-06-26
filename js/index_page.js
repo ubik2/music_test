@@ -1,5 +1,5 @@
-﻿import { MusicCard } from "./music_card";
-import { MusicScaleCard } from "./music_scale_card";
+﻿import { MusicNotesCard } from "./music_notes_card";
+import { MusicStaffCard } from "./music_staff_card";
 import { Deck } from "./deck";
 import { Persistence } from "./persistence";
 import { FrequencyAnalyser } from "./frequency_analyser";
@@ -7,7 +7,7 @@ import { Config } from "./config";
 import { Player } from "./player";
 import { SF2Parser } from './sf2_parser';
 import { SuperMemoAnkiScheduler } from "./supermemo_anki_scheduler";
-import { MusicCardPage } from "./music_card_page";
+import { MusicNotesPage } from "./music_notes_page";
 import { MusicScalePage } from "./music_scale_page";
 import { PracticePage } from "./practice_page";
 import { SettingsPage } from "./settings_page";
@@ -52,7 +52,7 @@ export class IndexPage {
                 if (j === i) {
                     continue;
                 }
-                cards.push(new MusicCard(keySignature, keys[i], keys[j]));
+                cards.push(new MusicNotesCard(keySignature, "treble", [keys[i], keys[j]]));
             }
         }
         const deck = new Deck(keySignature + " Major", cards);
@@ -62,8 +62,19 @@ export class IndexPage {
 
     static generateScalesDeck() {
         const scalesDeckContents = [ "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "A#", "Bb", "B" ]; // D#, "G#", 
-        const cards = scalesDeckContents.map((keySignature) => new MusicScaleCard(keySignature));
+        const cards = scalesDeckContents.map((keySignature) => new MusicStaffCard(keySignature, "treble"));
         const deck = new Deck("Scales", cards);
+        deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
+        return deck;
+    }
+
+    static generateSingleNoteDeck() {
+        const notesTrebleClef = [ "C/4", "D/4", "E/4", "F/4", "G/4", "A/4", "B/4", "C/5", "D/5", "E/5", "G/5" ];
+        const notesBassClef = [ "C/4", "B/3", "A/3", "G/3", "F/3", "E/3", "D/3", "C/3", "B/2", "A/2", "G/2" ];
+        const cardsTrebleClef = notesTrebleClef.map(note => new MusicNotesCard("C", "treble", [note]));
+        const cardsBassClef = notesBassClef.map(note => new MusicNotesCard("C", "bass", [note]));
+        const cards = cardsTrebleClef.concat(cardsBassClef);
+        const deck = new Deck("Singles", cards);
         deck.scheduler = new SuperMemoAnkiScheduler(deck, deck.logger, deck.random, deck.dateUtil);
         return deck;
     }
@@ -110,7 +121,7 @@ export class IndexPage {
             const cardsContentWindow = window.frames["cards"].contentWindow;
             let cardPage;
             if (deck.deckId !== "Scales") {
-                cardPage = new MusicCardPage(cardsContentWindow.document, deck, this.player);
+                cardPage = new MusicNotesPage(cardsContentWindow.document, deck, this.player);
             } else {
                 cardPage = new MusicScalePage(cardsContentWindow.document, deck, this.player);
             }
@@ -275,7 +286,7 @@ export class IndexPage {
                 }
             });
 
-            // load up all the decks
+            // load up all the standard decks
             keySignatures.forEach((keySignature) => {
                 persistence.loadDeck(keySignature + " Major", (success, loadedDeck) => {
                     if (success) {
@@ -304,6 +315,27 @@ export class IndexPage {
                     if (loadedDeck === undefined) {
                         console.log("Generating new scale deck");
                         const newDeck = IndexPage.generateScalesDeck();
+                        persistence.saveDeck(newDeck, (success, savedDeck) => {
+                            if (success) {
+                                this.onReady(savedDeck);
+                            } else {
+                                throw "Failed to save newly generated deck";
+                            }
+                        });
+                    } else {
+                        console.log("Loaded deck: ", loadedDeck);
+                        this.onReady(loadedDeck);
+                    }
+                } else {
+                    throw "Failed to load deck";
+                }
+            });
+            // load up the single note deck
+            persistence.loadDeck("Singles", (success, loadedDeck) => {
+                if (success) {
+                    if (loadedDeck === undefined) {
+                        console.log("Generating new singles deck");
+                        const newDeck = IndexPage.generateSingleNoteDeck();
                         persistence.saveDeck(newDeck, (success, savedDeck) => {
                             if (success) {
                                 this.onReady(savedDeck);
@@ -375,7 +407,7 @@ export class IndexPage {
             buttonElement.onclick = () => this.showCards(inDeck);
         }
         const practiceButtonElement = document.getElementById("practiceButton" + idSuffix);
-        if (this.soundFontLoaded && inDeck.deckId !== "Scales") {
+        if (this.soundFontLoaded && inDeck.deckId !== "Scales" && inDeck.deckId !== "Singles") {
             practiceButtonElement.disabled = false;
             practiceButtonElement.onclick = () => this.showPractice(inDeck);
         }

@@ -113,7 +113,7 @@ export class PracticePage {
 
         let currentNotes = [];
         while (currentNotes.length < 4) {
-            currentNotes.push(NoteHelper.getStaveNote(currentNote));
+            currentNotes.push(NoteHelper.getStaveNote(currentNote, "treble"));
 
             // choose next note
             currentNote = PracticePage.chooseRandomKey(this.notesMap[currentNote]);

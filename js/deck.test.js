@@ -1,6 +1,6 @@
 import { Deck } from "./deck";
 import { Logger, DummyLogger, TestRandom, TestDateUtil } from "./utils";
-import { MusicCard } from "./music_card";
+import { MusicNotesCard } from "./music_notes_card";
 import { CardType, Queue } from "./card";
 import { Grade, BaseScheduler } from "./base_scheduler";
 import { SuperMemoScheduler } from "./supermemo_scheduler";
@@ -21,7 +21,7 @@ function generateTestDeck() {
                 continue;
             }
             //cards.push(new Card());
-            cards.push(new MusicCard('C', keys[i], keys[j]));
+            cards.push(new MusicNotesCard('C', "treble", [keys[i], keys[j]]));
         }
     }
     return new Deck("C", cards, undefined, testLogger, testRandom, testDateUtil);
